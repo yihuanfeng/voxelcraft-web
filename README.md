@@ -1,7 +1,6 @@
-# VoxelCraft 网页版（开源 VoxelCraft 二次开发）
+# VoxelCraft 网页版
 
-基于开源项目 [VoxelCraft](https://github.com/jerrychan7/WebMC) 二次开发的网页版沙盒游戏。
-Three.js（本地化到 `lib/three.module.js`，v0.160）渲染，无外部依赖、无需构建，浏览器直接可玩，进度保存在本地浏览器中。
+网页版沙盒游戏。Three.js（本地化到 `lib/three.module.js`，v0.160）渲染，无外部依赖、无需构建，浏览器直接可玩，进度保存在本地浏览器中。
 
 ## 快速开始
 
@@ -56,7 +55,7 @@ mc/
 ├── css/main.css          # 全部样式
 ├── lib/three.module.js   # 本地化 Three.js（v0.160）
 ├── backups/              # 历史版本备份（原始开源版 / 单文件中文版）
-└── WebMC/                # 上游开源仓库克隆（独立 git 仓库，不参与本项目提交）
+└── WebMC/                # 遗留克隆目录（独立 git 仓库，不参与本项目提交）
 ```
 
 ## 开发指南

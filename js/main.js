@@ -44,7 +44,7 @@ bindInventoryUI();
 bindTableUI();
 
 const hasSave = !!localStorage.getItem(SAVE_KEY);
-setMenuSubtitle(hasSave ? '检测到存档，点击开始自动继续' : '网页版迷你沙盒世界 · 开源 VoxelCraft 二次开发');
+setMenuSubtitle(hasSave ? '检测到存档，点击开始自动继续' : '网页版迷你沙盒世界');
 updateSaveStatus();
 
 /* ================================================================
