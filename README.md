@@ -1,6 +1,6 @@
 # VoxelCraft 网页版（开源 VoxelCraft 二次开发）
 
-基于开源项目 [VoxelCraft](https://github.com/jerrychan7/WebMC) 二次开发的网页版《我的世界》。
+基于开源项目 [VoxelCraft](https://github.com/jerrychan7/WebMC) 二次开发的网页版沙盒游戏。
 Three.js（本地化到 `lib/three.module.js`，v0.160）渲染，无外部依赖、无需构建，浏览器直接可玩，进度保存在本地浏览器中。
 
 ## 快速开始
@@ -11,10 +11,10 @@ Three.js（本地化到 `lib/three.module.js`，v0.160）渲染，无外部依�
 ```bash
 ./start.command          # 一键启动本地服务器（no-cache，端口 8000）
 # 或手动：
-python3 server.py 8000   # 支持任意端口；访问 http://localhost:8000/Minecraft.html
+python3 server.py 8000   # 支持任意端口；访问 http://localhost:8000/game.html
 ```
 
-也可直接双击 `Minecraft.html` 打开，但**推荐用服务器方式**（模块加载与存档更稳定）。
+也可直接双击 `game.html` 打开，但**推荐用服务器方式**（模块加载与存档更稳定）。
 
 ## 操作键位
 
@@ -36,7 +36,7 @@ python3 server.py 8000   # 支持任意端口；访问 http://localhost:8000/Min
 
 ```
 mc/
-├── Minecraft.html        # 唯一入口（薄壳：HUD/菜单/背包/工作台 UI 结构）
+├── game.html        # 唯一入口（薄壳：HUD/菜单/背包/工作台 UI 结构）
 ├── server.py             # 本地 no-cache 静态服务器
 ├── start.command         # 一键启动脚本
 ├── js/                   # 全部游戏逻辑（ES Modules）
