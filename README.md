@@ -1,9 +1,12 @@
-# 我的世界 · 网页版（VoxelCraft 二次开发）
+# VoxelCraft 网页版（开源 VoxelCraft 二次开发）
 
 基于开源项目 [VoxelCraft](https://github.com/jerrychan7/WebMC) 二次开发的网页版《我的世界》。
 Three.js（本地化到 `lib/three.module.js`，v0.160）渲染，无外部依赖、无需构建，浏览器直接可玩，进度保存在本地浏览器中。
 
 ## 快速开始
+
+- **在线试玩**（GitHub Pages）：https://yihuanfeng.github.io/voxelcraft-web/
+- **本地运行**：
 
 ```bash
 ./start.command          # 一键启动本地服务器（no-cache，端口 8000）
