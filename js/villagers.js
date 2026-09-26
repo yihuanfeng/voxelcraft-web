@@ -1,0 +1,54 @@
+/* ================================================================
+   村民 NPC：围绕村庄随机漫步（仅主世界）
+================================================================ */
+import * as THREE from 'three';
+import { villages, moveEntity } from './world.js';
+import { scene } from './renderer.js';
+
+export const villagers = [];
+const SKIN = 0xd8a06a, ROBE = 0x7a3a2a;
+
+function makeVillagerMesh(v) {
+  const g = new THREE.Group();
+  const head = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.5, 0.5), new THREE.MeshLambertMaterial({ color: SKIN }));
+  head.position.y = 1.5;
+  const body = new THREE.Mesh(new THREE.BoxGeometry(0.6, 0.8, 0.4), new THREE.MeshLambertMaterial({ color: ROBE }));
+  body.position.y = 0.85;
+  g.add(head, body);
+  g.position.copy(v.pos);
+  scene.add(g);
+  return g;
+}
+
+export function spawnVillagers() {
+  for (const v of villages) {
+    const n = 2 + Math.floor(Math.random() * 2);
+    for (let i = 0; i < n; i++) {
+      const ent = {
+        pos: new THREE.Vector3(v.x + (Math.random() - 0.5) * 4, v.y, v.z + (Math.random() - 0.5) * 4),
+        vel: new THREE.Vector3(), w: 0.6, h: 1.6, onGround: false, impact: 0,
+        yaw: Math.random() * 6.28, timer: Math.random() * 3, mesh: null,
+      };
+      villagers.push(ent);
+    }
+  }
+  for (const v of villagers) v.mesh = makeVillagerMesh(v);
+}
+export function setVillagersVisible(vis) {
+  for (const v of villagers) if (v.mesh) v.mesh.visible = vis;
+}
+export function updateVillagers(dt) {
+  for (const v of villagers) {
+    v.timer -= dt;
+    if (v.timer <= 0) {
+      v.timer = 2 + Math.random() * 3;
+      v.vel.x = (Math.random() - 0.5) * 2;
+      v.vel.z = (Math.random() - 0.5) * 2;
+      v.yaw = Math.atan2(v.vel.x, v.vel.z);
+    }
+    v.vel.y -= 24 * dt;
+    moveEntity(v, dt);
+    if (v.pos.y < 1.5) { v.pos.y = 1.5; v.vel.y = 0; }
+    if (v.mesh) { v.mesh.position.copy(v.pos); v.mesh.rotation.y = v.yaw; }
+  }
+}

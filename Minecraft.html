@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>我的世界·网页版</title>
+<link rel="stylesheet" href="./css/main.css?v=33">
+<script type="importmap">
+{ "imports": { "three": "./lib/three.module.js" } }
+</script>
+</head>
+<body>
+<div id="game"></div>
+
+<!-- 准星 / 特效层 -->
+<div id="crosshair"></div>
+<div id="minebar"><div></div></div>
+<div id="flash"></div>
+<div id="watertint"></div>
+
+<!-- HUD -->
+<div id="hud">
+  <div id="debug"></div>
+  <div id="hearts"></div>
+  <div id="hotbar"></div>
+</div>
+
+<!-- 主菜单 -->
+<div id="menu">
+  <div class="menu-card">
+    <h1>我的世界 · 网页版</h1>
+    <div class="menu-sub" id="menuSubtitle">网页版迷你沙盒世界 · 开源 VoxelCraft 二次开发</div>
+    <div class="menu-ops">
+      <b>WASD</b> 移动 &nbsp; <b>空格</b> 跳跃 &nbsp; <b>Shift</b> 疾跑<br>
+      <b>鼠标左键</b> 挖掘 / 攻击 &nbsp; <b>鼠标右键</b> 放置方块<br>
+      <b>E</b> 打开背包（三段式：合成 / 库存+盔甲 / 快捷栏）&nbsp; <b>Q</b> 丢弃手中物品<br>
+      <b>右键</b> 对着工作台可打开 3×3 合成 &nbsp; <b>紫色传送门</b> 进入下界<br>
+      <b>1-9</b> 或 <b>点击</b> 切换快捷栏 &nbsp; <b>F</b> 飞行 &nbsp; <b>C</b> 下降
+    </div>
+    <button class="btn" id="playBtn">▶  开始游戏</button>
+    <div class="toggle-row">
+      <input type="checkbox" id="peacefulToggle">
+      <label for="peacefulToggle">🕊 和平模式（无怪物）</label>
+    </div>
+    <div class="btn-row">
+      <button class="btn sm" id="saveNowBtn">💾  保存进度</button>
+      <button class="btn sm warn" id="resetSaveBtn">🗑  清除存档</button>
+    </div>
+    <div class="save-status" id="saveStatus">💾 游戏进度会自动保存在当前浏览器中（也可手动保存）</div>
+  </div>
+</div>
+
+<!-- 死亡界面 -->
+<div id="deathScreen">
+  <h2>你死了</h2>
+  <div id="deathMsg"></div>
+  <button class="btn" id="respawnBtn">🔄  重新出生</button>
+</div>
+
+<!-- 背包界面（三段式：顶部合成 / 中部库存+盔甲 / 底部快捷栏） -->
+<div id="inventoryUI">
+  <div class="inv-panel inv-layout">
+    <div class="inv-head">
+      <h2>🎒 背包</h2>
+      <button class="inv-close" id="closeInvBtn" title="关闭 (E)">✕</button>
+    </div>
+    <div class="inv-top">
+      <div class="craft-row">
+        <div>
+          <h3>合成格 2×2</h3>
+          <div class="craft-2x2">
+            <div class="is-slot empty" id="craftSlot0"></div>
+            <div class="is-slot empty" id="craftSlot1"></div>
+            <div class="is-slot empty" id="craftSlot2"></div>
+            <div class="is-slot empty" id="craftSlot3"></div>
+          </div>
+        </div>
+        <div class="craft-arrow">→</div>
+        <div>
+          <h3>合成</h3>
+          <div id="craftResult" class="empty" title="点击合成"></div>
+        </div>
+      </div>
+      <div class="craft-hint">点击中部物品选中，再点击合成格放入；点击已放入的材料取回；点击结果格完成合成。</div>
+      <h3>配方（2×2 / 更多配方见工作台）</h3>
+      <div class="recipe-list" id="recipeList"></div>
+    </div>
+    <div class="inv-mid">
+      <div class="inv-mid-left">
+        <h3>盔甲（点击穿戴 / 脱下）</h3>
+        <div class="armor-grid" id="armorGrid"></div>
+        <div class="armor-def" id="armorDef"></div>
+      </div>
+      <div class="inv-mid-right">
+        <h3>背包物品（点击选中）</h3>
+        <div class="inv-grid" id="invGrid"></div>
+      </div>
+    </div>
+    <div class="inv-bottom">
+      <h3>快捷栏（数字键 1-9 / 点击切换）</h3>
+      <div class="inv-grid inv-hotbar" id="invHotbar"></div>
+    </div>
+  </div>
+</div>
+
+<!-- 工作台界面（三段式，3×3 合成） -->
+<div id="tableUI">
+  <div class="inv-panel inv-layout">
+    <div class="inv-head">
+      <h2>🛠 工作台 &nbsp;·&nbsp; 3×3 合成</h2>
+      <button class="inv-close" id="closeTableBtn" title="关闭 (Esc)">✕</button>
+    </div>
+    <div class="inv-top">
+      <div class="craft-row">
+        <div>
+          <h3>合成格 3×3</h3>
+          <div class="craft-3x3">
+            <div class="is-slot empty" id="tableSlot0"></div>
+            <div class="is-slot empty" id="tableSlot1"></div>
+            <div class="is-slot empty" id="tableSlot2"></div>
+            <div class="is-slot empty" id="tableSlot3"></div>
+            <div class="is-slot empty" id="tableSlot4"></div>
+            <div class="is-slot empty" id="tableSlot5"></div>
+            <div class="is-slot empty" id="tableSlot6"></div>
+            <div class="is-slot empty" id="tableSlot7"></div>
+            <div class="is-slot empty" id="tableSlot8"></div>
+          </div>
+        </div>
+        <div class="craft-arrow big">→</div>
+        <div>
+          <h3>合成</h3>
+          <div id="tableResult" class="empty" title="点击合成"></div>
+        </div>
+      </div>
+      <div class="craft-hint">点击中部物品选中，再点击合成格放入（按形状摆放）；点击结果格完成合成。关闭时材料自动退回背包。</div>
+      <h3>配方（原版主要类别）</h3>
+      <div class="recipe-list table-recipe-list" id="tableRecipeList"></div>
+    </div>
+    <div class="inv-mid">
+      <div class="inv-mid-right">
+        <h3>背包物品（点击选中）</h3>
+        <div class="inv-grid" id="tableInvGrid"></div>
+      </div>
+    </div>
+    <div class="inv-bottom">
+      <h3>快捷栏</h3>
+      <div class="inv-grid inv-hotbar" id="tableHotbar"></div>
+    </div>
+  </div>
+</div>
+
+<script type="module" src="./js/main.js"></script>
+</body>
+</html>

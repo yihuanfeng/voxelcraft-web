@@ -1,0 +1,16 @@
+# macOS
+.DS_Store
+
+# 上游开源仓库克隆（独立 git 仓库，不属于本项目源码）
+WebMC/
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+
+# Node
+node_modules/
+
+# 日志
+*.log
