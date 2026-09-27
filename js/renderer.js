@@ -1,6 +1,6 @@
 import * as THREE from 'three';
-import { SIZE, HEIGHT, CHUNK, CHUNKS, AIR, WATER, GLASS, BLOCKS, atlas } from './constants.js';
-import { world, widx, surfaceY, getBlock } from './world.js';
+import { HEIGHT, CHUNK, AIR, WATER, GLASS, BLOCKS, atlas } from './constants.js';
+import { surfaceY, getBlock } from './world.js';
 import { raycastVoxel } from './world.js';
 
 /* ================================================================
@@ -50,8 +50,8 @@ function tileFor(id, face) {
   return t.side ?? t.all;
 }
 function meshBlock(x, y, z) {
-  if (y < 0) return 8;                       // BEDROCK
-  if (y >= HEIGHT || x < 0 || x >= SIZE || z < 0 || z >= SIZE) return AIR;
+  if (y < 0) return 8;                       // BEDROCK（下方无尽基岩）
+  if (y >= HEIGHT) return AIR;
   return getBlock(x, y, z);
 }
 
@@ -61,7 +61,7 @@ const waterMat  = new THREE.MeshLambertMaterial({ map: atlas.tex, transparent: t
 const glassMat  = new THREE.MeshLambertMaterial({ map: atlas.tex, transparent: true, opacity: 0.45,
                                                   depthWrite: false, side: THREE.DoubleSide });
 
-const chunkMeshes = new Array(CHUNKS * CHUNKS).fill(null).map(() => ({ opaque: null, water: null, glass: null }));
+const chunkMeshes = new Map();   // key 'cx,cz' → { opaque, water, glass }（无限区块）
 
 function buildArrays(cx, cz) {
   const pos=[], nrm=[], uv=[], idx=[], wpos=[], wnrm=[], wuv=[], widxa=[], gpos=[], gnrm=[], guv=[], gidxa=[];
@@ -107,13 +107,17 @@ function toGeometry(pos, nrm, uv, idx) {
   g.setIndex(idx);
   return g;
 }
-export function rebuildChunk(cx, cz) {
-  if (cx < 0 || cx >= CHUNKS || cz < 0 || cz >= CHUNKS) return;
-  const ch = chunkMeshes[cx + cz * CHUNKS];
-  const a = buildArrays(cx, cz);
+function disposeChunk(ch) {
   if (ch.opaque) { ch.opaque.geometry.dispose(); scene.remove(ch.opaque); ch.opaque = null; }
   if (ch.water)  { ch.water.geometry.dispose();  scene.remove(ch.water);  ch.water = null; }
   if (ch.glass)  { ch.glass.geometry.dispose();  scene.remove(ch.glass);  ch.glass = null; }
+}
+export function rebuildChunk(cx, cz) {
+  const key = cx + ',' + cz;
+  let ch = chunkMeshes.get(key);
+  if (!ch) { ch = { opaque: null, water: null, glass: null }; chunkMeshes.set(key, ch); }
+  const a = buildArrays(cx, cz);
+  disposeChunk(ch);
   if (a.pos.length) {
     ch.opaque = new THREE.Mesh(toGeometry(a.pos, a.nrm, a.uv, a.idx), opaqueMat);
     scene.add(ch.opaque);
@@ -138,20 +142,44 @@ export function rebuildAround(x, z) {
   if (z % CHUNK === CHUNK - 1) rebuildChunk(cx, cz + 1);
 }
 export function rebuildAll() {
-  for (let cx = 0; cx < CHUNKS; cx++) for (let cz = 0; cz < CHUNKS; cz++) rebuildChunk(cx, cz);
+  for (const key of [...chunkMeshes.keys()]) {
+    const [cx, cz] = key.split(',').map(Number);
+    rebuildChunk(cx, cz);
+  }
 }
 // —— 大世界分帧构建（优先玩家附近）——
 const buildQueue = [];
 const buildPerFrame = 5;
+const LOAD_R = 8, KEEP_R = 12;   // 加载半径 8 区块（128 格），保留半径 12
 export function scheduleRebuildAll(px, pz) {
   buildQueue.length = 0;
   const pcx = Math.floor(px / CHUNK), pcz = Math.floor(pz / CHUNK);
-  for (let cx = 0; cx < CHUNKS; cx++) for (let cz = 0; cz < CHUNKS; cz++) buildQueue.push([cx, cz]);
+  for (let cx = pcx - LOAD_R; cx <= pcx + LOAD_R; cx++)
+    for (let cz = pcz - LOAD_R; cz <= pcz + LOAD_R; cz++) buildQueue.push([cx, cz]);
   buildQueue.sort((a, b) => {
     const da = Math.max(Math.abs(a[0] - pcx), Math.abs(a[1] - pcz));
     const db = Math.max(Math.abs(b[0] - pcx), Math.abs(b[1] - pcz));
     return da - db;
   });
+  // 回收远离玩家的区块网格
+  for (const [key, ch] of chunkMeshes) {
+    const [cx, cz] = key.split(',').map(Number);
+    if (Math.abs(cx - pcx) > KEEP_R || Math.abs(cz - pcz) > KEEP_R) {
+      disposeChunk(ch);
+      chunkMeshes.delete(key);
+    }
+  }
+}
+// 玩家跨区块时自动补载（每帧调用，内部低频检查）
+let lastPcx = null, lastPcz = null, loadT = 0;
+export function ensureChunks(px, pz, dt = 0.016) {
+  loadT += dt;
+  if (loadT < 0.4) return;
+  loadT = 0;
+  const pcx = Math.floor(px / CHUNK), pcz = Math.floor(pz / CHUNK);
+  if (pcx === lastPcx && pcz === lastPcz) return;
+  lastPcx = pcx; lastPcz = pcz;
+  scheduleRebuildAll(px, pz);
 }
 export function updateBuildQueue() {
   for (let i = 0; i < buildPerFrame && buildQueue.length; i++) {

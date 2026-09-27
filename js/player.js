@@ -1,7 +1,8 @@
 import * as THREE from 'three';
 import { SIZE, AIR, WATER, BEDROCK, BLOCKS, isPlaceable,
          STONE, COBBLE, COAL_ORE, IRON_ORE, GOLD_ORE, DIAMOND_ORE,
-         COAL, IRON_INGOT, GOLD_INGOT, DIAMOND, LAVA, PORTAL, toolSpeedFor } from './constants.js';
+         COAL, IRON_INGOT, GOLD_INGOT, DIAMOND, LAVA, PORTAL, toolSpeedFor,
+         TOOL_TIER, BLOCK_TIER } from './constants.js';
 import { getBlock, setBlock, surfaceY, moveEntity, markDirty } from './world.js';
 import { sfx, initAudio } from './audio.js';
 import { addItem, removeItem, itemCount, sel, hotbar, selectedHotbarId, autoSlot, inventoryEvents, armorDefense } from './inventory.js';
@@ -35,7 +36,9 @@ export const player = {
   onGround: false, hp: 20, dead: false, fly: false,
   inWater: false, headInWater: false, impact: 0,
   lastHurt: -999,
+  air: 20,               // 氧气（水下耗尽后窒息掉血）
 };
+export let suffocateT = 0;
 
 export let clockTime = 0;
 export let flashV = 0;
@@ -103,6 +106,19 @@ export function updatePlayer(dt) {
     if (lavaT > 0.6) { lavaT = 0; damagePlayer(2, null, '岩浆'); }
   } else lavaT = 0;
 
+  // 水下呼吸：头没入水中消耗氧气，耗尽后窒息掉血；出水恢复
+  if (player.headInWater) {
+    player.air = Math.max(0, player.air - dt * 1.35);
+    if (player.air <= 0) {
+      suffocateT += dt;
+      if (suffocateT >= 1) { suffocateT = 0; damagePlayer(1, null, '窒息'); }
+    }
+  } else {
+    player.air = Math.min(20, player.air + dt * 4);
+    suffocateT = 0;
+  }
+  playerEvents.dispatchEvent(new CustomEvent('airchange'));
+
   camera.position.set(player.pos.x, player.pos.y + player.eye, player.pos.z);
   camera.rotation.set(player.pitch, player.yaw, 0);
 }
@@ -124,14 +140,18 @@ const ORE_DROPS = {
   [STONE]: COBBLE, [COAL_ORE]: COAL, [IRON_ORE]: IRON_INGOT,
   [GOLD_ORE]: GOLD_INGOT, [DIAMOND_ORE]: DIAMOND,
 };
-export function breakBlock(x, y, z) {
+export function breakBlock(x, y, z, toolId) {
   const id = getBlock(x, y, z);
-  if (id === AIR || id === BEDROCK || id === WATER) return false;
+  if (id === AIR || id === WATER) return false;
+  if (id === BEDROCK && !TOOL_TIER[toolId]) return false;   // 基岩必须用镐
   setBlock(x, y, z, AIR);
   markDirty(x, y, z);
-  const drop = ORE_DROPS[id] || id;
-  addItem(drop);
-  autoSlot(drop);
+  // 工具等级不足 → 挖掉但无掉落（提示会显示需要更高级镐）
+  const tier = TOOL_TIER[toolId] || 0;
+  const needTier = BLOCK_TIER[id] || 0;
+  let drop = ORE_DROPS[id] || id;
+  if (needTier && tier < needTier) drop = null;
+  if (drop) { addItem(drop); autoSlot(drop); }
   burst(x + 0.5, y + 0.5, z + 0.5, BLOCKS[id].color, 12, 3.2, 3.5);
   sfx.break();
   rebuildAround(x, z);
@@ -148,12 +168,13 @@ export function updateMining(dt) {
   const hard = BLOCKS[hit.id].hard;
   if (!isFinite(hard)) { minebar.style.display = 'none'; return; }
   const tool = selectedHotbarId();
+  if (hit.id === BEDROCK && !TOOL_TIER[tool]) return;   // 基岩必须用镐才能挖
   mining.t += dt / toolSpeedFor(tool, hit.id);
   const p = Math.min(1, mining.t / hard);
   minebar.style.display = 'block';
   minebar.firstElementChild.style.width = (p * 100).toFixed(1) + '%';
   if (p >= 1) {
-    breakBlock(hit.x, hit.y, hit.z);
+    breakBlock(hit.x, hit.y, hit.z, tool);
     mining.t = 0;
     mining.x = mining.y = mining.z = -999;
   }

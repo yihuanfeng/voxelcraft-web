@@ -10,13 +10,15 @@ import { BLOCKS, atlas,
          IRON_HELMET, IRON_CHESTPLATE, IRON_LEGGINGS, IRON_BOOTS,
          GOLD_HELMET, GOLD_CHESTPLATE, GOLD_LEGGINGS, GOLD_BOOTS,
          DIAMOND_HELMET, DIAMOND_CHESTPLATE, DIAMOND_LEGGINGS, DIAMOND_BOOTS,
-         ARMOR, ARMOR_SLOTS } from './constants.js';
+         EMERALD, BONE, STRING, GUNPOWDER, ARMOR, ARMOR_SLOTS, recommendTool,
+         BLOCK_TIER, TOOL_TIER } from './constants.js';
 import { inv, invSlots, hotbar, sel, setSel, setHotbarSlot, addItem, removeItem,
          itemCount, inventoryEvents, armorSlots, wearArmor, takeOffArmor, armorDefense } from './inventory.js';
 import { craftSlots, tableSlots, RECIPES, TABLE_RECIPES,
          matchCraftRecipe, matchTableRecipe, craftOnce, blockName,
          craftEvents, setTableOpen, tableOpen } from './crafting.js';
-import { player, playerEvents } from './player.js';
+import { selectedHotbarId } from './inventory.js';
+import { player, playerEvents, mining } from './player.js';
 import { zombies } from './zombies.js';
 import { worldTime, isDay, renderer } from './renderer.js';
 import { lastSaveAt } from './save.js';
@@ -50,6 +52,8 @@ const KIND_BY_ID = {
   [DIAMOND_SHOVEL]: ['shovel', 'diamond'], [DIAMOND_HOE]: ['hoe', 'diamond'],
   [IRON_INGOT]: ['ingot', 'iron'], [GOLD_INGOT]: ['ingot', 'gold'], [DIAMOND]: ['diamond', 'gem'], [COAL]: ['coal', 'gem'],
   [LEATHER]: ['leather', 'leather'],
+  [EMERALD]: ['emerald', 'gem'], [BONE]: ['bone', 'mat'],
+  [STRING]: ['string', 'mat'], [GUNPOWDER]: ['powder', 'mat'],
   [LEATHER_HELMET]: ['helmet', 'leather'], [LEATHER_CHESTPLATE]: ['chest', 'leather'],
   [LEATHER_LEGGINGS]: ['legs', 'leather'], [LEATHER_BOOTS]: ['boots', 'leather'],
   [IRON_HELMET]: ['helmet', 'iron'], [IRON_CHESTPLATE]: ['chest', 'iron'],
@@ -115,6 +119,23 @@ function drawSpecial(ctx, size, kind, mat) {
       if (y === 5 || y === 10) col = (x >= 3 && x <= 12) ? c.dark : null;
       if (y === 4 && (x === 3 || x === 12)) col = c.dark;
       if (y === 11 && (x === 3 || x === 12)) col = c.dark;
+    } else if (kind === 'emerald') {
+      if (y === 3 || y === 7) col = (x === 7) ? '#3fd95f' : null;
+      else if (y === 4 || y === 6) col = (x >= 6 && x <= 8) ? '#2fcf4f' : null;
+      else if (y === 5) col = (x >= 5 && x <= 9) ? '#2fc84f' : null;
+      else if (y === 8) col = (x === 7) ? '#1a8a3a' : null;
+    } else if (kind === 'bone') {
+      if (y >= 3 && y <= 12 && (x === y - 2 || x === y + 1)) col = '#e8e4da';
+      if ((x === 4 || x === 5) && (y === 3 || y === 4)) col = '#d0ccc4';
+      if ((x === 10 || x === 11) && (y === 11 || y === 12)) col = '#d0ccc4';
+    } else if (kind === 'string') {
+      if (y === 6 && x >= 3 && x <= 12) col = (x % 2 === 0) ? '#e0e0e0' : '#c8c8c8';
+      if (y === 7 && x >= 4 && x <= 11) col = (x % 2 === 1) ? '#e0e0e0' : '#c8c8c8';
+      if (y === 8 && x >= 5 && x <= 10) col = (x % 2 === 0) ? '#e0e0e0' : '#c8c8c8';
+    } else if (kind === 'powder') {
+      if (y >= 4 && y <= 11 && x >= 4 && x <= 11) col = (x + y) % 3 === 0 ? '#6a6a6a' : '#8a8a8a';
+      if ((y === 4 || y === 11) && x >= 4 && x <= 11) col = '#555555';
+      if ((x === 4 || x === 11) && y >= 4 && y <= 11) col = '#555555';
     } else if (kind === 'helmet') {
       if (y >= 2 && y <= 5) col = (x >= 3 && x <= 12) ? c.head : null;
       else if (y >= 6 && y <= 9) col = (x === 3 || x === 12) ? c.head : null;
@@ -206,6 +227,45 @@ export function renderHotbarHud() {
 /* ================================================================
    调试信息
 ================================================================ */
+// 氧气条（仅头没入水中时显示）
+export function renderAir() {
+  const el = $('airbar');
+  if (!el) return;
+  if (!player.headInWater) { el.style.display = 'none'; return; }
+  el.style.display = 'flex';
+  const p = player.air / 20;
+  el.innerHTML = '<span class="air-ico">气泡</span><div class="air-track"><div class="air-fill" style="width:' +
+    (p * 100).toFixed(0) + '%"></div></div>' +
+    (player.air <= 0 ? '<span class="air-warn">窒息！</span>' : '');
+}
+
+// 准星指向方块信息：名称 / 推荐工具 / 硬度 / 挖掘血量 / 等级提示
+export function renderBlockInfo(hit) {
+  const el = $('blockinfo');
+  if (!el) return;
+  if (!hit) { el.style.display = 'none'; return; }
+  const id = hit.id;
+  const b = BLOCKS[id];
+  if (!b || b.hard <= 0) { el.style.display = 'none'; return; }
+  el.style.display = 'block';
+  const tool = selectedToolId();
+  let html = `<b>${b.name}</b> · 硬度 ${b.hard} · 推荐：${recommendTool(id)}`;
+  const tier = BLOCK_TIER[id];
+  if (tier && tier > 1) {
+    const toolTier = TOOL_TIER[tool] || 0;
+    html += `<span class="blk-tier">${toolTier >= tier ? '✓ 当前工具可采集' : '⚠ 需要 ' + ['', '木镐', '石镐', '铁镐', '钻石镐'][tier]}</span>`;
+  }
+  if (mining.active && mining.x === hit.x && mining.y === hit.y && mining.z === hit.z) {
+    const hard = b.hard;
+    const p = Math.min(100, mining.t / hard * 100);
+    html += `<div class="blk-hp"><div style="width:${p.toFixed(0)}%"></div></div>`;
+  }
+  el.innerHTML = html;
+}
+function selectedToolId() {
+  return (typeof selectedHotbarId === 'function') ? selectedHotbarId() : null;
+}
+
 export function renderDebug(fps, pos, zombieCount, fly, swim, dim) {
   const debugEl = $('debug');
   const t = worldTime < 240 ? `白天 ${(worldTime / 240 * 12 + 6).toFixed(1)} 时` : '夜晚';

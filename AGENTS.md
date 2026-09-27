@@ -60,12 +60,15 @@ zombies.js → constants / world / player / renderer / audio
 - 背包是 16 格 `invSlots`（每格 `{id,count}|null`），`inv` 是 id→count 派生视图；旧格式 `inv` 对象自动迁移
 - 设置（和平模式）在 `voxelcraft_settings_v1`
 
-### 大世界（必须遵守）
+### 无限世界（必须遵守）
 
-- 世界 `SIZE=512 × HEIGHT=96`，区块 16×16 共 32×32 块
-- 网格构建**必须**走分帧：`scheduleRebuildAll(px,pz)`（按玩家距离排序）+ 每帧 `updateBuildQueue()`（每帧 5 块）。禁止改回一次性 `rebuildAll`，否则首载卡死
+- **无限区块化**：主世界 `chunks`、下界 `netherChunks` 为 Map（key `"cx,cz"`，每块 Uint8Array 16×16×96）
+- `getBlock/setBlock` 任意坐标：未生成的区块按确定性噪声**惰性生成**（genChunk，树/矿洞/矿物同旧算法）
+- 出生原点 (256,256)；村庄 5 处与传送门 2 处固定布局（genChunk 时放置）
+- 网格构建走分帧：`scheduleRebuildAll(px,pz)`（玩家周围 LOAD_R=8 区块）+ 每帧 `updateBuildQueue()`（5 块/帧）+ `ensureChunks()` 自动补载（跨区块触发，0.4 秒节流）；远离 KEEP_R=12 的区块网格自动回收
 - 挖/放单块用 `rebuildAround(x,z)` 局部重建
 - 渲染器有玻璃渲染通道（`GLASS` 走 `gpos/glassMat` 半透明）
+- 存档方块差异任意坐标（`markDirty` 不再受 512 边界限制）
 
 ### 合成（crafting.js）
 

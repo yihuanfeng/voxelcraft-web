@@ -28,6 +28,34 @@ html, body {
   height: 100%; width: 0; background: #ffe27a;
   border-radius: 3px; transition: width 60ms linear;
 }
+/* 准星指向方块信息 */
+#blockinfo {
+  display: none; position: fixed; left: 50%; top: 58%;
+  transform: translate(-50%, -50%); z-index: 4; pointer-events: none;
+  background: rgba(0, 0, 0, 0.7); color: #fff;
+  padding: 4px 10px; border-radius: 4px; font-size: 13px;
+  text-align: center; line-height: 1.5; white-space: nowrap;
+}
+#blockinfo b { color: #ffe27a; }
+#blockinfo .blk-tier { color: #ff9a5a; }
+#blockinfo .blk-hp {
+  margin: 3px auto 0; width: 140px; height: 5px;
+  background: rgba(255, 255, 255, 0.2); border-radius: 3px; overflow: hidden;
+}
+#blockinfo .blk-hp > div { height: 100%; background: #7df5df; width: 0; }
+/* 氧气条 */
+#airbar {
+  display: none; position: fixed; left: 50%; top: 70%;
+  transform: translateX(-50%); z-index: 4; pointer-events: none;
+  align-items: center; gap: 6px; font-size: 13px; color: #bfe8ff;
+  background: rgba(0, 30, 70, 0.55); padding: 4px 10px; border-radius: 4px;
+}
+#airbar .air-track {
+  width: 120px; height: 8px; background: rgba(255, 255, 255, 0.25);
+  border-radius: 4px; overflow: hidden;
+}
+#airbar .air-fill { height: 100%; background: #59c9ff; }
+#airbar .air-warn { color: #ff6a6a; }
 /* ---------- 闪红 / 水雾 ---------- */
 #flash, #watertint {
   position: fixed; inset: 0; pointer-events: none; z-index: 2;

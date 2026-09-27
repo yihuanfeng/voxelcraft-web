@@ -31,7 +31,7 @@ export const AIR = 0, GRASS = 1, DIRT = 2, STONE = 3, LOG = 4, LEAVES = 5,
              IRON_HELMET = 64, IRON_CHESTPLATE = 65, IRON_LEGGINGS = 66, IRON_BOOTS = 67,
              GOLD_HELMET = 68, GOLD_CHESTPLATE = 69, GOLD_LEGGINGS = 70, GOLD_BOOTS = 71,
              DIAMOND_HELMET = 72, DIAMOND_CHESTPLATE = 73, DIAMOND_LEGGINGS = 74, DIAMOND_BOOTS = 75,
-             LEATHER = 76;
+             LEATHER = 76, EMERALD = 77, BONE = 78, STRING = 79, GUNPOWDER = 80;
 
 // 可放置为方块的 ID 集合（方块类；物品/工具/盔甲不可放置）
 export const PLACEABLE_IDS = new Set([
@@ -64,6 +64,29 @@ export const TOOL_SPEED = {
   [WOOD_SHOVEL]: 0.55, [STONE_SHOVEL]: 0.46, [IRON_SHOVEL]: 0.4, [GOLD_SHOVEL]: 0.36, [DIAMOND_SHOVEL]: 0.33,
   [WOOD_HOE]: 0.6,   [STONE_HOE]: 0.5,    [IRON_HOE]: 0.45,   [GOLD_HOE]: 0.4,   [DIAMOND_HOE]: 0.37,
 };
+// 镐类等级：木1 石2 金2 铁3 钻4
+export const TOOL_TIER = {
+  [WOOD_PICK]: 1, [STONE_PICK]: 2, [GOLD_PICK]: 2, [IRON_PICK]: 3, [DIAMOND_PICK]: 4,
+};
+// 方块所需挖掘等级（需对应等级镐，否则挖掉无掉落）
+export const BLOCK_TIER = {
+  [STONE]: 1, [COBBLE]: 1, [COAL_ORE]: 1, [FURNACE]: 1, [STONE_BRICKS]: 1,
+  [IRON_ORE]: 2, [GOLD_ORE]: 2,
+  [DIAMOND_ORE]: 3, [OBSIDIAN]: 4, [ANCIENT_DEBRIS]: 4, [BEDROCK]: 1,
+};
+// 推荐工具提示（挖掘/采集）
+export function recommendTool(blockId) {
+  if (PICKS_BLOCKS.has(blockId)) return BLOCK_TIER[blockId] && BLOCK_TIER[blockId] > 1
+    ? '镐（需 ' + ['', '木镐', '石镐', '铁镐', '钻石镐'][BLOCK_TIER[blockId]] + '）' : '镐';
+  if (AXES_BLOCKS.has(blockId)) return '斧';
+  if (SHOVELS_BLOCKS.has(blockId)) return '锹';
+  return '手 / 任意工具';
+}
+const PICKS_BLOCKS = new Set([STONE, COBBLE, COAL_ORE, IRON_ORE, GOLD_ORE, DIAMOND_ORE,
+                              OBSIDIAN, ANCIENT_DEBRIS, BEDROCK, FURNACE, STONE_BRICKS]);
+const AXES_BLOCKS = new Set([LOG, PLANK, CRAFT_TABLE, CHEST, FENCE, LADDER]);
+const SHOVELS_BLOCKS = new Set([DIRT, SAND, GRASS]);
+
 export function toolSpeedFor(id, blockId) {
   const mult = TOOL_SPEED[id];
   if (!mult) return 1;
@@ -71,7 +94,7 @@ export function toolSpeedFor(id, blockId) {
     return (blockId === STONE || blockId === COBBLE || blockId === COAL_ORE ||
             blockId === IRON_ORE || blockId === GOLD_ORE || blockId === DIAMOND_ORE ||
             blockId === OBSIDIAN || blockId === ANCIENT_DEBRIS || blockId === FURNACE ||
-            blockId === STONE_BRICKS) ? mult : 1;
+            blockId === STONE_BRICKS || blockId === BEDROCK) ? mult : 1;
   }
   if (AXES.has(id)) {
     return (blockId === LOG || blockId === PLANK || blockId === CRAFT_TABLE ||
@@ -116,7 +139,7 @@ export const BLOCKS = {
   [LEAVES]: { name:'树叶',     hard:0.15, tiles:{ all:6 },                   color:0x2f7a1f },
   [SAND]:   { name:'沙子',     hard:0.6,  tiles:{ all:7 },                   color:0xdcd29b },
   [WATER]:  { name:'水',       hard:Infinity, tiles:{ all:11 },              color:0x3f76e4 },
-  [BEDROCK]:{ name:'基岩',     hard:Infinity, tiles:{ all:10 },              color:0x444444 },
+  [BEDROCK]:{ name:'基岩',     hard:8,      tiles:{ all:10 },              color:0x444444 },
   [PLANK]:  { name:'木板',     hard:1.2,  tiles:{ all:8 },                   color:0xa08050 },
   [COBBLE]: { name:'圆石',     hard:1.9,  tiles:{ all:9 },                   color:0x777777 },
   [COAL_ORE]:   { name:'煤矿石', hard:3.0, tiles:{ all:12 }, color:0x3a3a3a },
@@ -169,6 +192,10 @@ export const BLOCKS = {
   [DIAMOND]:    { name:'钻石', hard:0, tiles:{ all:15 }, color:0x6fe3d0 },
   [COAL]:       { name:'煤',   hard:0, tiles:{ all:12 }, color:0x2a2a2a },
   [LEATHER]:    { name:'皮革', hard:0, tiles:{ all:8 }, color:0x8a5a2a },
+  [EMERALD]:    { name:'绿宝石', hard:0, tiles:{ all:15 }, color:0x3fd95f },
+  [BONE]:       { name:'骨头', hard:0, tiles:{ all:3 }, color:0xe8e4da },
+  [STRING]:     { name:'线', hard:0, tiles:{ all:6 }, color:0xdddddd },
+  [GUNPOWDER]:  { name:'火药', hard:0, tiles:{ all:7 }, color:0x8a8a8a },
   [LEATHER_HELMET]:    { name:'皮革头盔', hard:0, tiles:{ all:8 }, color:0x8a5a2a },
   [LEATHER_CHESTPLATE]:{ name:'皮革胸甲', hard:0, tiles:{ all:8 }, color:0x8a5a2a },
   [LEATHER_LEGGINGS]:  { name:'皮革护腿', hard:0, tiles:{ all:8 }, color:0x8a5a2a },

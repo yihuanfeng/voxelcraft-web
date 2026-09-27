@@ -1,9 +1,9 @@
 import * as THREE from 'three';
-import { WATER } from './constants.js';
+import { WATER, EMERALD, BONE, STRING, GUNPOWDER } from './constants.js';
 import { getBlock, isSolid, moveEntity, surfaceY } from './world.js';
 import { sfx } from './audio.js';
 import { player, damagePlayer } from './player.js';
-import { scene, burst, dropHeart, isDay } from './renderer.js';
+import { scene, camera, burst, spawnDropped, isDay } from './renderer.js';
 
 /* ================================================================
    怪物系统：僵尸（近战）/ 骷髅（射箭）/ 蜘蛛（快速跳跃）/ 苦力怕（爆炸）
@@ -23,8 +23,8 @@ export function setPeaceful(b) {
 
 const TYPES = {
   zombie:  { hp: 10, speed: 2.35, dmg: 3,  atkRange: 1.3, atkCd: 1.0, burns: true,  scale: 1 },
-  skeleton:{ hp: 8,  speed: 2.2,  dmg: 2,  atkRange: 22,  atkCd: 2.2, burns: false, scale: 1 },
-  spider:  { hp: 8,  speed: 4.2,  dmg: 2,  atkRange: 1.4, atkCd: 0.9, burns: false, scale: 1.1 },
+  skeleton:{ hp: 8,  speed: 2.2,  dmg: 2,  atkRange: 22,  atkCd: 2.2, burns: true,  scale: 1 },
+  spider:  { hp: 8,  speed: 4.2,  dmg: 2,  atkRange: 1.4, atkCd: 0.9, burns: true,  scale: 1.1 },
   creeper: { hp: 12, speed: 1.25, dmg: 8,  atkRange: 2.2, atkCd: 999, burns: true,  scale: 1 },
 };
 
@@ -70,7 +70,7 @@ class Zombie {
       box(0.09, 0.09, 0.05, this.mats[3], -0.11, 1.76, 0.26);
       box(0.09, 0.09, 0.05, this.mats[3],  0.11, 1.76, 0.26);
     } else if (t === 'skeleton') {
-      this.mats = [M(0xe8e4da), M(0xc8c4ba), M(0xb8b4aa), M(0x1a1a1a)];
+      this.mats = [M(0x6faf5a), M(0x5f9a4e), M(0x4f8a3e), M(0x1a1a1a)];
       this.legL = box(0.2, 0.8, 0.2, this.mats[2], -0.12, 0.75, 0, true);
       this.legR = box(0.2, 0.8, 0.2, this.mats[2],  0.12, 0.75, 0, true);
       box(0.5, 0.62, 0.26, this.mats[1], 0, 1.12, 0);
@@ -108,6 +108,15 @@ class Zombie {
       box(0.1, 0.1, 0.06, this.mats[3],  0.12, 1.62, 0.16);
       box(0.24, 0.1, 0.06, this.mats[3], 0, 1.44, 0.16);
     }
+    // 头顶血条（红底 + 绿前景，锚定左端）
+    this.hpBg = new THREE.Mesh(new THREE.BoxGeometry(0.9, 0.09, 0.02),
+                               new THREE.MeshBasicMaterial({ color: 0x8a1f1f }));
+    this.hpFg = new THREE.Mesh(new THREE.BoxGeometry(0.9, 0.09, 0.02),
+                               new THREE.MeshBasicMaterial({ color: 0x3fd95f }));
+    this.hpFg.geometry.translate(-0.45, 0, 0.011);
+    this.hpBg.position.set(0, 2.3, 0); this.hpFg.position.set(0, 2.3, 0);
+    g.add(this.hpBg); g.add(this.hpFg);
+
     this.group = g;
     scene.add(g);
 
@@ -132,11 +141,20 @@ class Zombie {
   }
 
   die() {
-    const col = { zombie: 0x4a8f3c, skeleton: 0xe8e4da, spider: 0x3a1f3a, creeper: 0x3f8f2f }[this.type] || 0x777777;
-    burst(this.pos.x, this.pos.y + 1, this.pos.z, col, 16, 4, 4);
-    burst(this.pos.x, this.pos.y + 1, this.pos.z, 0x7a1f1f, 8, 3, 3);
+    const col = { zombie: 0x4a8f3c, skeleton: 0x6faf5a, spider: 0x3a1f3a, creeper: 0x3f8f2f }[this.type] || 0x777777;
+    burst(this.pos.x, this.pos.y + 1, this.pos.z, col, 14, 4, 4);
     sfx.zdie();
-    if (Math.random() < 0.4) dropHeart(this.pos.x, this.pos.y + 0.6, this.pos.z);
+    // 掉落物：方块物品（可拾取）
+    const drop = { zombie: EMERALD, skeleton: BONE, spider: STRING, creeper: GUNPOWDER }[this.type];
+    if (drop) {
+      const n = 1 + Math.floor(Math.random() * 2);   // 1~2 个
+      for (let i = 0; i < n; i++) {
+        spawnDropped(drop,
+                     this.pos.x + (Math.random() - 0.5) * 0.5,
+                     this.pos.y + 0.4 + Math.random() * 0.3,
+                     this.pos.z + (Math.random() - 0.5) * 0.5);
+      }
+    }
     this.dispose();
   }
 
@@ -164,7 +182,7 @@ class Zombie {
 
   update(dt) {
     const T = TYPES[this.type];
-    // 白天燃烧（仅僵尸/苦力怕）
+    // 白天燃烧（所有怪物白天自燃消失）
     if (T.burns && isDay && !this.inWater()) {
       this.hp -= 2.2 * dt;
       if (Math.random() < dt * 6) burst(this.pos.x, this.pos.y + 1.9, this.pos.z, 0x555555, 1, 0.6, 1.2, 0.12, 0.8);
@@ -272,6 +290,11 @@ class Zombie {
     if (this.speed > 0.01) this.group.rotation.y = Math.atan2(dirX, dirZ);
     this.group.position.copy(this.pos);
     this.hitbox.position.set(this.pos.x, this.pos.y + 1, this.pos.z);
+
+    // 血条跟随与血量
+    this.hpFg.scale.x = Math.max(0, this.hp / T.hp);
+    this.hpBg.lookAt(camera.position);
+    this.hpFg.lookAt(camera.position);
   }
 
   inWater() {
@@ -293,7 +316,6 @@ export function updateSpawner(dt) {
     const d = 24 + Math.random() * 18;
     const x = Math.floor(player.pos.x + Math.cos(a) * d);
     const z = Math.floor(player.pos.z + Math.sin(a) * d);
-    if (x < 2 || x >= 510 || z < 2 || z >= 510) continue;
     const y = surfaceY(x, z);
     if (y < 2) continue;
     const r = Math.random();

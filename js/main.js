@@ -10,7 +10,8 @@ import {
 } from './save.js';
 import {
   renderer, scene, camera, aimBlock, highlight,
-  rebuildAll, scheduleRebuildAll, updateBuildQueue, updateDayNight, updateParticles,
+  rebuildAll, scheduleRebuildAll, updateBuildQueue, ensureChunks,
+  updateDayNight, updateParticles,
   updatePickups, updateDropped, setWorldTime, isDay, droppedItems, pickups,
 } from './renderer.js';
 import {
@@ -26,7 +27,7 @@ import {
   buildHotbarHud, renderHearts, renderDebug,
   updateSaveStatus, openInventory, closeInventory, isInventoryOpen,
   bindInventoryUI, bindTableUI, openTable, closeTable, isTableOpen,
-  setMenuSubtitle,
+  setMenuSubtitle, renderAir, renderBlockInfo,
 } from './ui.js';
 import { spawnVillagers, updateVillagers, setVillagersVisible, villagers } from './villagers.js';
 
@@ -282,6 +283,7 @@ function animate() {
       portalCd -= dt;
       if (portalCd <= 0) { switchDimension(); portalCd = 2; }
     } else portalCd = 0;
+    ensureChunks(player.pos.x, player.pos.z, dt);   // 无限世界：跨区块自动补载
     if (debugAcc > 0.5) {
       fps = fps * 0.95 + (1 / Math.max(dt, 1e-4)) * 0.05;
       renderDebug(fps, player.pos, zombies.length, player.fly, player.inWater, dim);
@@ -294,6 +296,8 @@ function animate() {
     updateDayNight(dt * 0.2, spawn.x, spawn.y, spawn.z);
   }
   updateParticles(dt);
+  renderAir();          // 氧气条
+  renderBlockInfo(aimBlock());   // 准星指向方块信息
   updateBuildQueue();   // 分帧构建剩余区块
   const flash = updateFlash(dt);
   document.getElementById('flash').style.opacity = flash;

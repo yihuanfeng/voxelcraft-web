@@ -1,4 +1,4 @@
-import { world, inWorld, widx, pendingDiffs, saveDirty, setDim, dim } from './world.js';
+import { setBlock, inWorld, pendingDiffs, saveDirty, setDim, dim } from './world.js';
 import { player } from './player.js';
 import { inv, invSlots, hotbar, sel, setSel, armorSlots } from './inventory.js';
 import { worldTime, setWorldTime } from './renderer.js';
@@ -20,7 +20,7 @@ export function applyWorldDiff() {
     if (!data || data.v !== 1 || !data.world) return;
     for (const key in data.world) {
       const p = key.split(','), x = +p[0], y = +p[1], z = +p[2];
-      if (inWorld(x, y, z)) world[widx(x, y, z)] = data.world[key];
+      if (inWorld(x, y, z)) setBlock(x, y, z, data.world[key]);
     }
   } catch (e) { console.warn('方块存档恢复失败', e); }
 }
