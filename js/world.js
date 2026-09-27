@@ -1,5 +1,5 @@
 import { HEIGHT, CHUNK, SEA, AIR, BEDROCK, STONE, SAND, DIRT, GRASS, WATER, LOG, LEAVES, PLANK,
-         COAL_ORE, IRON_ORE, GOLD_ORE, DIAMOND_ORE, LAVA, OBSIDIAN, PORTAL, CRAFT_TABLE,
+         COAL_ORE, IRON_ORE, GOLD_ORE, DIAMOND_ORE, COPPER_ORE, LAVA, OBSIDIAN, PORTAL, CRAFT_TABLE,
          NETHERRACK, GLOWSTONE, ANCIENT_DEBRIS, FURNACE, CHEST } from './constants.js';
 import { fbm, fbm3, hash2 } from './noise.js';
 
@@ -66,7 +66,18 @@ function fillColumn(arr, cx, cz, lx, lz, isNether) {
   } else {
     const n = fbm(x * 0.014, z * 0.014, 4);
     const detail = fbm(x * 0.06 + 500, z * 0.06 + 500, 2);
-    const h = Math.floor(15 + n * 32 + detail * 6);
+    let h = Math.floor(15 + n * 32 + detail * 6);
+    // 大陆尺度：山脉 / 平原 / 大海（出生点周围保持原地形）
+    if (Math.abs(x - 256) >= 48 || Math.abs(z - 256) >= 48) {
+      const land = fbm(x * 0.0035, z * 0.0035, 3);
+      if (land < 0.18) {
+        h = Math.floor(52 + (0.18 - land) * 160 + detail * 10);        // 高山
+      } else if (land > 0.32) {
+        h = Math.floor(h * 0.45) - 6;                                   // 深海
+      } else if (land > 0.28) {
+        h = Math.floor(h * 0.68);                                       // 浅海 / 低地
+      }
+    }
     for (let y = 0; y <= h; y++) {
       let id;
       if (y === 0) id = BEDROCK;
@@ -78,8 +89,8 @@ function fillColumn(arr, cx, cz, lx, lz, isNether) {
     for (let y = h + 1; y <= SEA; y++) arr[windex(lx, y, lz)] = WATER;
     // 洞穴（更深的矿洞）
     for (let y = 4; y < h - 1; y += 2) {
-      if (fbm3(x * 0.055, y * 0.09, z * 0.055, 2) > 0.68) {
-        for (let dy = 0; dy < 2; dy++) {
+      if (fbm3(x * 0.055, y * 0.09, z * 0.055, 2) > 0.60) {
+        for (let dy = 0; dy < 3; dy++) {
           const yy = y + dy;
           if (yy > 2 && yy < h - 1 && arr[windex(lx, yy, lz)] === STONE) arr[windex(lx, yy, lz)] = AIR;
         }
@@ -89,16 +100,23 @@ function fillColumn(arr, cx, cz, lx, lz, isNether) {
     for (let y = 2; y < h - 1; y++) {
       if (arr[windex(lx, y, lz)] !== STONE) continue;
       const r = hash2(x * 31 + y * 7, z * 31 + y * 13);
-      if (y <= 16 && r < 0.0032)      arr[windex(lx, y, lz)] = DIAMOND_ORE;
-      else if (y <= 30 && r < 0.005)  arr[windex(lx, y, lz)] = GOLD_ORE;
-      else if (y <= 52 && r < 0.012)  arr[windex(lx, y, lz)] = IRON_ORE;
-      else if (y <= 80 && r < 0.022)  arr[windex(lx, y, lz)] = COAL_ORE;
+      if (y <= 18 && r < 0.0055)      arr[windex(lx, y, lz)] = DIAMOND_ORE;
+      else if (y <= 34 && r < 0.009)  arr[windex(lx, y, lz)] = GOLD_ORE;
+      else if (y <= 52 && r < 0.016)  arr[windex(lx, y, lz)] = COPPER_ORE;
+      else if (y <= 56 && r < 0.02)   arr[windex(lx, y, lz)] = IRON_ORE;
+      else if (y <= 80 && r < 0.024)  arr[windex(lx, y, lz)] = COAL_ORE;
     }
     // 深层岩浆池
-    for (let y = 3; y <= 7; y++) {
-      if (arr[windex(lx, y, lz)] === STONE && hash2(x * 17 + y, z * 17) < 0.004) {
+    for (let y = 3; y <= 6; y++) {
+      if (arr[windex(lx, y, lz)] === STONE && hash2(x * 17 + y, z * 17) < 0.003) {
         arr[windex(lx, y, lz)] = LAVA;
         if (arr[windex(lx, y + 1, lz)] === STONE) arr[windex(lx, y + 1, lz)] = LAVA;
+        // 岩浆池底垫基岩：挖穿岩浆即见基岩层
+        for (let yy = y - 1; yy >= y - 2 && yy > 0; yy--) {
+          if (arr[windex(lx, yy, lz)] === STONE || arr[windex(lx, yy, lz)] === DIRT) {
+            arr[windex(lx, yy, lz)] = BEDROCK;
+          }
+        }
       }
     }
     // 树（写本区块内；边界树叶由相邻区块自行生成）
@@ -196,15 +214,17 @@ export const netherPortals = [];    // {x, y, z} 下界传送门
 const VILLAGE_SPOTS = [];
 (function () {
   let placed = 0;
-  for (let tries = 0; tries < 180 && placed < 5; tries++) {
+  for (let tries = 0; tries < 320 && placed < 8; tries++) {
     const vx = 30 + Math.floor(hash2(tries * 7 + 1, 99) * (512 - 60));
     const vz = 30 + Math.floor(hash2(tries * 13 + 5, 55) * (512 - 60));
     if (Math.abs(vx - 256) < 24 && Math.abs(vz - 256) < 24) continue;
+    if (placed > 0 && VILLAGE_SPOTS.some(([ax, az]) =>
+        Math.abs(ax - vx) < 26 && Math.abs(az - vz) < 26)) continue;   // 村庄间距
     VILLAGE_SPOTS.push([vx, vz]);
     placed++;
   }
 })();
-const PORTAL_SPOTS = [[96, 92], [228, 40]];
+const PORTAL_SPOTS = [[96, 92], [228, 40], [320, 256]];
 
 function pget(x, y, z, isNether) {
   if (y < 0) return BEDROCK;
@@ -273,6 +293,71 @@ function placeVillage(vx, vz) {
   villages.push({ x: vx + 0.5, y: vy + 1.2, z: vz + 0.5 });
 }
 
+// 沉船：深海底概率生成（船体原木 + 甲板 + 1~2 个箱子）
+function placeShip(x, z) {
+  const h = surfaceY(x, z);
+  if (h > SEA - 4 || h < 3) return;      // 需要够深的海
+  // 朝向：沿 x 或 z 随机
+  const alongX = hash2(x * 3 + 7, z * 3 + 7) < 0.5;
+  const LEN = 8;
+  for (let i = 0; i < LEN; i++) {
+    const bx = alongX ? x + i : x;
+    const bz = alongX ? z : z + i;
+    for (let dy = 1; dy <= 2; dy++) {
+      wset(bx, h + dy, bz, LOG);
+    }
+    if (i > 0 && i < LEN - 1) {
+      if (alongX) { wset(bx, h + 1, bz - 1, LOG); wset(bx, h + 1, bz + 1, LOG); }
+      else { wset(bx - 1, h + 1, bz, LOG); wset(bx + 1, h + 1, bz, LOG); }
+    }
+  }
+  // 甲板
+  for (let i = 1; i < LEN - 1; i++) {
+    const bx = alongX ? x + i : x;
+    const bz = alongX ? z : z + i;
+    wset(bx, h + 2, bz, PLANK);
+  }
+  // 箱子 1~2 个
+  const nChest = 1 + Math.floor(hash2(x, z) * 2);
+  for (let i = 0; i < nChest; i++) {
+    const ci = 2 + Math.floor(hash2(x + i * 13, z + i * 7) * (LEN - 4));
+    const cx2 = alongX ? x + ci : x;
+    const cz2 = alongX ? z : z + ci;
+    wset(cx2, h + 2, cz2, CHEST);
+  }
+}
+// 黑曜石门框自动激活：玩家摆出 2×5 门框（10 块黑曜石）后自动填充传送门
+export function tryLightPortal(bx, by, bz) {
+  const isObs = (x, y, z) => getBlock(x, y, z) === OBSIDIAN;
+  for (let along = 0; along < 2; along++) {
+    for (let o = 0; o < 2; o++) {
+      const x1 = along === 0 ? bx - o : bx;
+      const z1 = along === 0 ? bz : bz - o;
+      if (!isObs(x1, by, z1) || !isObs(x1 + (along ? 0 : 1), by, z1 + (along ? 1 : 0))) continue;
+      let ok = true;
+      for (let yy = by; yy <= by + 5; yy++) {
+        const a = isObs(x1, yy, z1), b = isObs(x1 + (along ? 0 : 1), yy, z1 + (along ? 1 : 0));
+        if (!a || !b) { ok = false; break; }
+      }
+      if (!ok) continue;
+      // 激活：中间 2×4 填传送门
+      let lit = false;
+      for (let yy = by + 1; yy <= by + 4; yy++) {
+        for (let i = 0; i < 2; i++) {
+          const xx = x1 + (along ? 0 : i), zz = z1 + (along ? i : 0);
+          const cur = getBlock(xx, yy, zz);
+          if (cur === AIR || cur === WATER) { setBlock(xx, yy, zz, PORTAL); lit = true; }
+        }
+      }
+      if (lit) {
+        overworldPortals.push({ x: x1 + 0.5, y: by + 2.5, z: z1 + 0.5 });
+        return true;
+      }
+    }
+  }
+  return false;
+}
+
 function placeStructures(cx, cz) {
   const x0 = cx * CH, z0 = cz * CH;
   for (const [vx, vz] of VILLAGE_SPOTS) {
@@ -280,6 +365,12 @@ function placeStructures(cx, cz) {
   }
   for (const [px, pz] of PORTAL_SPOTS) {
     if (px >= x0 && px < x0 + CH && pz >= z0 && pz < z0 + CH) placePortalStructure(px, pz, false);
+  }
+  // 沉船：每区块 2 个候选点
+  for (let i = 0; i < 2; i++) {
+    const sx = x0 + Math.floor(hash2(cx * 131 + i * 17, cz * 131) * CH);
+    const sz = z0 + Math.floor(hash2(cx * 131 + i * 31, cz * 131 + 7) * CH);
+    if (hash2(cx * 97 + i * 5, cz * 97) < 0.02) placeShip(sx, sz);
   }
 }
 function placeNetherStructures(cx, cz) {

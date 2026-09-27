@@ -31,7 +31,9 @@ export const AIR = 0, GRASS = 1, DIRT = 2, STONE = 3, LOG = 4, LEAVES = 5,
              IRON_HELMET = 64, IRON_CHESTPLATE = 65, IRON_LEGGINGS = 66, IRON_BOOTS = 67,
              GOLD_HELMET = 68, GOLD_CHESTPLATE = 69, GOLD_LEGGINGS = 70, GOLD_BOOTS = 71,
              DIAMOND_HELMET = 72, DIAMOND_CHESTPLATE = 73, DIAMOND_LEGGINGS = 74, DIAMOND_BOOTS = 75,
-             LEATHER = 76, EMERALD = 77, BONE = 78, STRING = 79, GUNPOWDER = 80;
+             LEATHER = 76, EMERALD = 77, BONE = 78, STRING = 79, GUNPOWDER = 80,
+             RAW_MEAT = 81, COPPER_ORE = 82, COPPER_INGOT = 83,
+             COPPER_SWORD = 84, COPPER_PICK = 85, COPPER_AXE = 86, COPPER_SHOVEL = 87, COPPER_HOE = 88;
 
 // 可放置为方块的 ID 集合（方块类；物品/工具/盔甲不可放置）
 export const PLACEABLE_IDS = new Set([
@@ -43,11 +45,11 @@ export const PLACEABLE_IDS = new Set([
 export function isPlaceable(id) { return PLACEABLE_IDS.has(id); }
 
 // 工具按类别分组
-export const SWORDS = new Set([SWORD, STONE_SWORD, IRON_SWORD, GOLD_SWORD, DIAMOND_SWORD]);
-export const PICKS = new Set([WOOD_PICK, STONE_PICK, IRON_PICK, GOLD_PICK, DIAMOND_PICK]);
-export const AXES = new Set([WOOD_AXE, STONE_AXE, IRON_AXE, GOLD_AXE, DIAMOND_AXE]);
-export const SHOVELS = new Set([WOOD_SHOVEL, STONE_SHOVEL, IRON_SHOVEL, GOLD_SHOVEL, DIAMOND_SHOVEL]);
-export const HOES = new Set([WOOD_HOE, STONE_HOE, IRON_HOE, GOLD_HOE, DIAMOND_HOE]);
+export const SWORDS = new Set([SWORD, STONE_SWORD, IRON_SWORD, GOLD_SWORD, DIAMOND_SWORD, COPPER_SWORD]);
+export const PICKS = new Set([WOOD_PICK, STONE_PICK, IRON_PICK, GOLD_PICK, DIAMOND_PICK, COPPER_PICK]);
+export const AXES = new Set([WOOD_AXE, STONE_AXE, IRON_AXE, GOLD_AXE, DIAMOND_AXE, COPPER_AXE]);
+export const SHOVELS = new Set([WOOD_SHOVEL, STONE_SHOVEL, IRON_SHOVEL, GOLD_SHOVEL, DIAMOND_SHOVEL, COPPER_SHOVEL]);
+export const HOES = new Set([WOOD_HOE, STONE_HOE, IRON_HOE, GOLD_HOE, DIAMOND_HOE, COPPER_HOE]);
 
 // 工具攻击伤害
 export const TOOL_DAMAGE = {
@@ -56,6 +58,7 @@ export const TOOL_DAMAGE = {
   [IRON_SWORD]: 6, [IRON_PICK]: 4, [IRON_AXE]: 5, [IRON_SHOVEL]: 4, [IRON_HOE]: 3,
   [GOLD_SWORD]: 5, [GOLD_PICK]: 3, [GOLD_AXE]: 4, [GOLD_SHOVEL]: 3, [GOLD_HOE]: 2,
   [DIAMOND_SWORD]: 7, [DIAMOND_PICK]: 5, [DIAMOND_AXE]: 6, [DIAMOND_SHOVEL]: 5, [DIAMOND_HOE]: 4,
+  [COPPER_SWORD]: 5, [COPPER_PICK]: 3, [COPPER_AXE]: 4, [COPPER_SHOVEL]: 3, [COPPER_HOE]: 2,
 };
 // 镐 / 斧 / 锹 / 锄 挖掘加速（金最快、钻次之、铁第三）
 export const TOOL_SPEED = {
@@ -63,15 +66,17 @@ export const TOOL_SPEED = {
   [WOOD_AXE]: 0.5,   [STONE_AXE]: 0.42,  [IRON_AXE]: 0.35,  [GOLD_AXE]: 0.31,  [DIAMOND_AXE]: 0.28,
   [WOOD_SHOVEL]: 0.55, [STONE_SHOVEL]: 0.46, [IRON_SHOVEL]: 0.4, [GOLD_SHOVEL]: 0.36, [DIAMOND_SHOVEL]: 0.33,
   [WOOD_HOE]: 0.6,   [STONE_HOE]: 0.5,    [IRON_HOE]: 0.45,   [GOLD_HOE]: 0.4,   [DIAMOND_HOE]: 0.37,
+  [COPPER_PICK]: 0.35, [COPPER_AXE]: 0.38, [COPPER_SWORD]: 1, [COPPER_SHOVEL]: 0.43, [COPPER_HOE]: 0.47,
 };
 // 镐类等级：木1 石2 金2 铁3 钻4
 export const TOOL_TIER = {
-  [WOOD_PICK]: 1, [STONE_PICK]: 2, [GOLD_PICK]: 2, [IRON_PICK]: 3, [DIAMOND_PICK]: 4,
+  [WOOD_PICK]: 1, [STONE_PICK]: 2, [GOLD_PICK]: 2, [COPPER_PICK]: 2,
+  [IRON_PICK]: 3, [DIAMOND_PICK]: 4,
 };
 // 方块所需挖掘等级（需对应等级镐，否则挖掉无掉落）
 export const BLOCK_TIER = {
   [STONE]: 1, [COBBLE]: 1, [COAL_ORE]: 1, [FURNACE]: 1, [STONE_BRICKS]: 1,
-  [IRON_ORE]: 2, [GOLD_ORE]: 2,
+  [IRON_ORE]: 2, [GOLD_ORE]: 2, [COPPER_ORE]: 1,
   [DIAMOND_ORE]: 3, [OBSIDIAN]: 4, [ANCIENT_DEBRIS]: 4, [BEDROCK]: 1,
 };
 // 推荐工具提示（挖掘/采集）
@@ -82,7 +87,7 @@ export function recommendTool(blockId) {
   if (SHOVELS_BLOCKS.has(blockId)) return '锹';
   return '手 / 任意工具';
 }
-const PICKS_BLOCKS = new Set([STONE, COBBLE, COAL_ORE, IRON_ORE, GOLD_ORE, DIAMOND_ORE,
+const PICKS_BLOCKS = new Set([STONE, COBBLE, COAL_ORE, IRON_ORE, GOLD_ORE, DIAMOND_ORE, COPPER_ORE,
                               OBSIDIAN, ANCIENT_DEBRIS, BEDROCK, FURNACE, STONE_BRICKS]);
 const AXES_BLOCKS = new Set([LOG, PLANK, CRAFT_TABLE, CHEST, FENCE, LADDER]);
 const SHOVELS_BLOCKS = new Set([DIRT, SAND, GRASS]);
@@ -135,8 +140,8 @@ export const BLOCKS = {
   [GRASS]:  { name:'草方块',   hard:0.6,  tiles:{ top:0, side:1, bottom:2 }, color:0x6abe30 },
   [DIRT]:   { name:'泥土',     hard:0.6,  tiles:{ all:2 },                   color:0x8a5f3c },
   [STONE]:  { name:'石头',     hard:1.9,  tiles:{ all:3 },                   color:0x7d7d7d },
-  [LOG]:    { name:'原木',     hard:1.2,  tiles:{ top:5, side:4, bottom:5 }, color:0x6b4f2a },
-  [LEAVES]: { name:'树叶',     hard:0.15, tiles:{ all:6 },                   color:0x2f7a1f },
+  [LOG]:    { name:'原木',     hard:0.8,  tiles:{ top:5, side:4, bottom:5 }, color:0x6b4f2a },
+  [LEAVES]: { name:'树叶',     hard:0.45, tiles:{ all:6 },                   color:0x2f7a1f },
   [SAND]:   { name:'沙子',     hard:0.6,  tiles:{ all:7 },                   color:0xdcd29b },
   [WATER]:  { name:'水',       hard:Infinity, tiles:{ all:11 },              color:0x3f76e4 },
   [BEDROCK]:{ name:'基岩',     hard:8,      tiles:{ all:10 },              color:0x444444 },
@@ -146,6 +151,7 @@ export const BLOCKS = {
   [IRON_ORE]:   { name:'铁矿石', hard:3.5, tiles:{ all:13 }, color:0x8f7a66 },
   [GOLD_ORE]:   { name:'金矿石', hard:3.5, tiles:{ all:14 }, color:0xd9b23c },
   [DIAMOND_ORE]:{ name:'钻石矿石', hard:4.5, tiles:{ all:15 }, color:0x59d9c2 },
+  [COPPER_ORE]:{ name:'铜矿石', hard:3.0, tiles:{ all:34 }, color:0xcf8a3a },
   [LAVA]:       { name:'岩浆',   hard:Infinity, tiles:{ all:16 }, color:0xff7a1f },
   [OBSIDIAN]:   { name:'黑曜石', hard:Infinity, tiles:{ all:17 }, color:0x2a1f4a },
   [CRAFT_TABLE]:{ name:'工作台', hard:1.2, tiles:{ top:18, side:19, bottom:20 }, color:0xa08050 },
@@ -196,6 +202,13 @@ export const BLOCKS = {
   [BONE]:       { name:'骨头', hard:0, tiles:{ all:3 }, color:0xe8e4da },
   [STRING]:     { name:'线', hard:0, tiles:{ all:6 }, color:0xdddddd },
   [GUNPOWDER]:  { name:'火药', hard:0, tiles:{ all:7 }, color:0x8a8a8a },
+  [COPPER_INGOT]:{ name:'铜锭', hard:0, tiles:{ all:8 }, color:0xcf8a3a },
+  [RAW_MEAT]:  { name:'生肉', hard:0, tiles:{ all:7 }, color:0xd96a4a },
+  [COPPER_SWORD]:{ name:'铜剑', hard:0, tiles:{ all:8 }, color:0xcf8a3a },
+  [COPPER_PICK]: { name:'铜镐', hard:0, tiles:{ all:8 }, color:0xcf8a3a },
+  [COPPER_AXE]:  { name:'铜斧', hard:0, tiles:{ all:8 }, color:0xcf8a3a },
+  [COPPER_SHOVEL]:{ name:'铜锹', hard:0, tiles:{ all:8 }, color:0xcf8a3a },
+  [COPPER_HOE]:  { name:'铜锄', hard:0, tiles:{ all:8 }, color:0xcf8a3a },
   [LEATHER_HELMET]:    { name:'皮革头盔', hard:0, tiles:{ all:8 }, color:0x8a5a2a },
   [LEATHER_CHESTPLATE]:{ name:'皮革胸甲', hard:0, tiles:{ all:8 }, color:0x8a5a2a },
   [LEATHER_LEGGINGS]:  { name:'皮革护腿', hard:0, tiles:{ all:8 }, color:0x8a5a2a },
@@ -390,6 +403,11 @@ export function buildAtlas() {
     if (x <= 1 || x >= 14) return shade(140, 108, 66, 0.9 + rnd()*0.2);
     if (y % 4 === 1 || y % 4 === 2) return shade(150, 116, 72, 0.9 + rnd()*0.2);
     return shade(60, 48, 34, 0.9);
+  });
+  // 34 铜矿石：石头底 + 铜色斑点
+  tile(34, (x, y) => {
+    const stone = 0.78 + hash(x, y) * 0.1;
+    return (x % 5 === 0 && y % 5 === 0) ? shade(207, 138, 58, 1) : shade(125*stone, 125*stone, 125*stone, 1);
   });
 
   const tex = new THREE.CanvasTexture(cv);

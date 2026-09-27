@@ -6,6 +6,7 @@ import { BLOCKS, atlas,
          GOLD_SWORD, GOLD_PICK, GOLD_AXE, GOLD_SHOVEL, GOLD_HOE,
          DIAMOND_SWORD, DIAMOND_PICK, DIAMOND_AXE, DIAMOND_SHOVEL, DIAMOND_HOE,
          IRON_INGOT, GOLD_INGOT, DIAMOND, COAL,
+         COPPER_SWORD, COPPER_PICK, COPPER_AXE, COPPER_SHOVEL, COPPER_HOE, COPPER_INGOT, RAW_MEAT,
          LEATHER, LEATHER_HELMET, LEATHER_CHESTPLATE, LEATHER_LEGGINGS, LEATHER_BOOTS,
          IRON_HELMET, IRON_CHESTPLATE, IRON_LEGGINGS, IRON_BOOTS,
          GOLD_HELMET, GOLD_CHESTPLATE, GOLD_LEGGINGS, GOLD_BOOTS,
@@ -22,6 +23,7 @@ import { player, playerEvents, mining } from './player.js';
 import { zombies } from './zombies.js';
 import { worldTime, isDay, renderer } from './renderer.js';
 import { lastSaveAt } from './save.js';
+import { getBlock, surfaceY, villages, overworldPortals, chunks as worldChunks } from './world.js';
 
 /* ================================================================
    DOM 工具
@@ -38,6 +40,7 @@ const MAT = {
   gold:    { head: '#ffdf6e', dark: '#a67c1e' },
   diamond: { head: '#6fe3d0', dark: '#2a7a6a' },
   leather: { head: '#8a5a2a', dark: '#5a3a1a' },
+  copper:  { head: '#d98a4a', dark: '#8a4a1a' },
 };
 const KIND_BY_ID = {
   [SWORD]: ['sword', 'wood'], [WOOD_PICK]: ['pick', 'wood'], [WOOD_AXE]: ['axe', 'wood'],
@@ -50,10 +53,13 @@ const KIND_BY_ID = {
   [GOLD_SHOVEL]: ['shovel', 'gold'], [GOLD_HOE]: ['hoe', 'gold'],
   [DIAMOND_SWORD]: ['sword', 'diamond'], [DIAMOND_PICK]: ['pick', 'diamond'], [DIAMOND_AXE]: ['axe', 'diamond'],
   [DIAMOND_SHOVEL]: ['shovel', 'diamond'], [DIAMOND_HOE]: ['hoe', 'diamond'],
+  [COPPER_SWORD]: ['sword', 'copper'], [COPPER_PICK]: ['pick', 'copper'], [COPPER_AXE]: ['axe', 'copper'],
+  [COPPER_SHOVEL]: ['shovel', 'copper'], [COPPER_HOE]: ['hoe', 'copper'],
   [IRON_INGOT]: ['ingot', 'iron'], [GOLD_INGOT]: ['ingot', 'gold'], [DIAMOND]: ['diamond', 'gem'], [COAL]: ['coal', 'gem'],
   [LEATHER]: ['leather', 'leather'],
   [EMERALD]: ['emerald', 'gem'], [BONE]: ['bone', 'mat'],
   [STRING]: ['string', 'mat'], [GUNPOWDER]: ['powder', 'mat'],
+  [COPPER_INGOT]: ['ingot', 'copper'], [RAW_MEAT]: ['meat', 'mat'],
   [LEATHER_HELMET]: ['helmet', 'leather'], [LEATHER_CHESTPLATE]: ['chest', 'leather'],
   [LEATHER_LEGGINGS]: ['legs', 'leather'], [LEATHER_BOOTS]: ['boots', 'leather'],
   [IRON_HELMET]: ['helmet', 'iron'], [IRON_CHESTPLATE]: ['chest', 'iron'],
@@ -136,6 +142,10 @@ function drawSpecial(ctx, size, kind, mat) {
       if (y >= 4 && y <= 11 && x >= 4 && x <= 11) col = (x + y) % 3 === 0 ? '#6a6a6a' : '#8a8a8a';
       if ((y === 4 || y === 11) && x >= 4 && x <= 11) col = '#555555';
       if ((x === 4 || x === 11) && y >= 4 && y <= 11) col = '#555555';
+    } else if (kind === 'meat') {
+      if (y >= 4 && y <= 11 && x >= 4 && x <= 11) col = (x === 4 || x === 11 || y === 4 || y === 11) ? '#c45a3a' : '#e07a52';
+      if (y === 6 && x >= 7 && x <= 9) col = '#d9a060';
+      if (y === 7 && x >= 6 && x <= 8) col = '#d9a060';
     } else if (kind === 'helmet') {
       if (y >= 2 && y <= 5) col = (x >= 3 && x <= 12) ? c.head : null;
       else if (y >= 6 && y <= 9) col = (x === 3 || x === 12) ? c.head : null;
@@ -264,6 +274,96 @@ export function renderBlockInfo(hit) {
 }
 function selectedToolId() {
   return (typeof selectedHotbarId === 'function') ? selectedHotbarId() : null;
+}
+
+/* ================================================================
+   M 键地图：俯视地形图（玩家为中心 80×80），含村庄/传送门标记
+================================================================ */
+let mapOpen = false;
+let mapEl = null, mapCanvas = null;
+let mapLastDraw = 0;
+export function toggleMap() {
+  mapOpen = !mapOpen;
+  if (mapOpen) {
+    if (!mapEl) {
+      mapEl = document.createElement('div');
+      mapEl.id = 'worldmap';
+      mapEl.style.cssText = 'position:fixed;inset:0;background:rgba(8,10,18,0.72);z-index:900;display:flex;align-items:center;justify-content:center;flex-direction:column;font-family:sans-serif;';
+      mapCanvas = document.createElement('canvas');
+      mapCanvas.width = 560; mapCanvas.height = 560;
+      mapCanvas.style.cssText = 'border:3px solid #3a3f4f;border-radius:8px;background:#141826;';
+      const tip = document.createElement('div');
+      tip.textContent = '地图（M 键关闭）· 绿色=村庄  紫色=传送门  白色箭头=你';
+      tip.style.cssText = 'color:#cfd6e6;margin-top:10px;font-size:14px;letter-spacing:1px;';
+      mapEl.appendChild(mapCanvas);
+      mapEl.appendChild(tip);
+      document.body.appendChild(mapEl);
+    }
+    mapEl.style.display = 'flex';
+    renderMapNow();
+  } else if (mapEl) {
+    mapEl.style.display = 'none';
+  }
+}
+export function isMapOpen() { return mapOpen; }
+export function tickMap() {
+  if (!mapOpen) return;
+  const t = performance.now();
+  if (t - mapLastDraw > 400) { renderMapNow(); mapLastDraw = t; }
+}
+function renderMapNow() {
+  const ctx = mapCanvas.getContext('2d');
+  const R = 40, SC = 7;
+  const px = Math.floor(player.pos.x), pz = Math.floor(player.pos.z);
+  ctx.clearRect(0, 0, mapCanvas.width, mapCanvas.height);
+  const x0 = px - R, z0 = pz - R;
+  for (let dz = 0; dz < R * 2; dz++) {
+    for (let dx = 0; dx < R * 2; dx++) {
+      const wx = x0 + dx, wz = z0 + dz;
+      const cx = Math.floor(wx / 16), cz = Math.floor(wz / 16);
+      let col = '#1a2030';                       // 未探索
+      if (worldChunks.has(cx + ',' + cz)) {
+        const hy = surfaceY(wx, wz);
+        if (hy < 21) col = '#2a4a8a';            // 水
+        else {
+          const id = getBlock(wx, hy, wz);
+          const b = BLOCKS[id];
+          col = b ? '#' + b.color.toString(16).padStart(6, '0') : '#555';
+        }
+        // 微噪点，增加可读性
+        if (((wx * 73 + wz * 31) & 3) === 0) col = shade2(col);
+      }
+      ctx.fillStyle = col;
+      ctx.fillRect(dx * SC + 28, dz * SC + 28, SC - 0.5, SC - 0.5);
+    }
+  }
+  // 村庄（绿点）
+  ctx.fillStyle = '#3fd95f';
+  for (const v of villages) {
+    const gx = (v.x - x0) * SC + 28, gz = (v.z - z0) * SC + 28;
+    if (gx >= 20 && gx <= 540 && gz >= 20 && gz <= 540) ctx.fillRect(gx - 2, gz - 2, 5, 5);
+  }
+  // 传送门（紫点）
+  ctx.fillStyle = '#c46ae0';
+  for (const pt of overworldPortals) {
+    const gx = (pt.x - x0) * SC + 28, gz = (pt.z - z0) * SC + 28;
+    if (gx >= 20 && gx <= 540 && gz >= 20 && gz <= 540) ctx.fillRect(gx - 2, gz - 2, 5, 5);
+  }
+  // 玩家箭头（白色，按 yaw 旋转）
+  ctx.save();
+  ctx.translate(28 + R * SC, 28 + R * SC);
+  ctx.rotate(-player.yaw);
+  ctx.fillStyle = '#ffffff';
+  ctx.beginPath();
+  ctx.moveTo(0, -9); ctx.lineTo(5, 7); ctx.lineTo(0, 3); ctx.lineTo(-5, 7);
+  ctx.closePath(); ctx.fill();
+  ctx.restore();
+}
+function shade2(hex) {
+  const n = parseInt(hex.slice(1), 16);
+  const r = (n >> 16) & 255, g = (n >> 8) & 255, b = n & 255;
+  const k = 0.85 + (((n * 2654435761) >>> 0) % 1000) / 10000;
+  return `rgb(${(r*k)|0},${(g*k)|0},${(b*k)|0})`;
 }
 
 export function renderDebug(fps, pos, zombieCount, fly, swim, dim) {

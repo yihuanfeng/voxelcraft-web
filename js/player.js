@@ -1,9 +1,9 @@
 import * as THREE from 'three';
 import { SIZE, AIR, WATER, BEDROCK, BLOCKS, isPlaceable,
          STONE, COBBLE, COAL_ORE, IRON_ORE, GOLD_ORE, DIAMOND_ORE,
-         COAL, IRON_INGOT, GOLD_INGOT, DIAMOND, LAVA, PORTAL, toolSpeedFor,
+         COAL, IRON_INGOT, GOLD_INGOT, DIAMOND, COPPER_ORE, COPPER_INGOT, LAVA, PORTAL, toolSpeedFor,
          TOOL_TIER, BLOCK_TIER } from './constants.js';
-import { getBlock, setBlock, surfaceY, moveEntity, markDirty } from './world.js';
+import { getBlock, setBlock, surfaceY, moveEntity, markDirty, tryLightPortal } from './world.js';
 import { sfx, initAudio } from './audio.js';
 import { addItem, removeItem, itemCount, sel, hotbar, selectedHotbarId, autoSlot, inventoryEvents, armorDefense } from './inventory.js';
 import { camera, aimBlock, rebuildAround, burst, spawnDropped } from './renderer.js';
@@ -138,7 +138,7 @@ export const mining = { active: false, x: 0, y: 0, z: 0, t: 0 };
 
 const ORE_DROPS = {
   [STONE]: COBBLE, [COAL_ORE]: COAL, [IRON_ORE]: IRON_INGOT,
-  [GOLD_ORE]: GOLD_INGOT, [DIAMOND_ORE]: DIAMOND,
+  [GOLD_ORE]: GOLD_INGOT, [DIAMOND_ORE]: DIAMOND, [COPPER_ORE]: COPPER_INGOT,
 };
 export function breakBlock(x, y, z, toolId) {
   const id = getBlock(x, y, z);
@@ -197,6 +197,10 @@ export function placeBlock() {
   removeItem(id);
   sfx.place();
   rebuildAround(px, pz);
+  // 黑曜石搭出门框 → 自动激活传送门
+  if (id === OBSIDIAN && tryLightPortal(px, py, pz)) {
+    sfx.portal && sfx.portal();
+  }
 }
 
 /* ================================================================

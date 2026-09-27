@@ -28,6 +28,7 @@ import {
   updateSaveStatus, openInventory, closeInventory, isInventoryOpen,
   bindInventoryUI, bindTableUI, openTable, closeTable, isTableOpen,
   setMenuSubtitle, renderAir, renderBlockInfo,
+  toggleMap, isMapOpen, tickMap,
 } from './ui.js';
 import { spawnVillagers, updateVillagers, setVillagersVisible, villagers } from './villagers.js';
 
@@ -198,6 +199,13 @@ addEventListener('keydown', e => {
   if (e.code === 'Escape') {
     if (isTableOpen()) { closeTable(); if (!player.dead) lockPointer(); }
     else if (isInventoryOpen()) { closeInventory(); if (!player.dead) lockPointer(); }
+    else if (isMapOpen()) { toggleMap(); if (!player.dead) lockPointer(); }
+  }
+  if (e.code === 'KeyM' && started && !player.dead) {
+    if (!isInventoryOpen() && !isTableOpen()) {
+      if (!isMapOpen()) { toggleMap(); document.exitPointerLock && document.exitPointerLock(); }
+      else { toggleMap(); lockPointer(); }
+    }
   }
 });
 addEventListener('keyup', e => { keys[e.code] = false; });
@@ -262,7 +270,8 @@ function animate() {
   const dt = Math.min(clock.getDelta(), 0.05);
   debugAcc += dt;
 
-  if (started && locked && !player.dead && !isInventoryOpen() && !isTableOpen()) {
+  if (started && isMapOpen()) tickMap();
+  if (started && locked && !player.dead && !isInventoryOpen() && !isTableOpen() && !isMapOpen()) {
     updatePlayer(dt);
     for (const z of [...zombies]) z.update(dt);
     updateBoneProjectiles(dt);

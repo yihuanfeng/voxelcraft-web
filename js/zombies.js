@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { WATER, EMERALD, BONE, STRING, GUNPOWDER } from './constants.js';
+import { WATER, EMERALD, BONE, STRING, GUNPOWDER, RAW_MEAT } from './constants.js';
 import { getBlock, isSolid, moveEntity, surfaceY } from './world.js';
 import { sfx } from './audio.js';
 import { player, damagePlayer } from './player.js';
@@ -26,7 +26,9 @@ const TYPES = {
   skeleton:{ hp: 8,  speed: 2.2,  dmg: 2,  atkRange: 22,  atkCd: 2.2, burns: true,  scale: 1 },
   spider:  { hp: 8,  speed: 4.2,  dmg: 2,  atkRange: 1.4, atkCd: 0.9, burns: true,  scale: 1.1 },
   creeper: { hp: 12, speed: 1.25, dmg: 8,  atkRange: 2.2, atkCd: 999, burns: true,  scale: 1 },
+  tiger:   { hp: 14, speed: 4.6,  dmg: 4,  atkRange: 1.5, atkCd: 0.8, burns: true,  scale: 1.1 },
 };
+const NAMES = { zombie: '僵尸', skeleton: '骷髅', spider: '蜘蛛', creeper: '苦力怕', tiger: '老虎' };
 
 class Zombie {
   constructor(x, y, z, type = 'zombie') {
@@ -94,6 +96,28 @@ class Zombie {
         this.legs.push(box(0.08, 0.5, 0.08, this.mats[1],  0.5 * s, 1.25, zz, true));
       }
       this.body = body;
+    } else if (t === 'tiger') {
+      this.mats = [M(0xe8a83a), M(0x5a3a1a), M(0x2a1a0a), M(0x1a1a1a)];
+      // 四足身体：躯干 + 头
+      box(0.7, 0.5, 1.2, this.mats[0], 0, 1.1, -0.1);
+      box(0.55, 0.5, 0.6, this.mats[0], 0, 1.35, 0.45);
+      // 黑条纹
+      box(0.72, 0.12, 0.14, this.mats[1], 0, 1.15, -0.55);
+      box(0.72, 0.12, 0.14, this.mats[1], 0, 1.2, -0.15);
+      box(0.72, 0.12, 0.14, this.mats[1], 0, 1.15, 0.25);
+      // 耳朵 + 眼睛
+      box(0.12, 0.12, 0.1, this.mats[1], -0.16, 1.68, 0.42);
+      box(0.12, 0.12, 0.1, this.mats[1],  0.16, 1.68, 0.42);
+      box(0.08, 0.08, 0.06, this.mats[3], -0.12, 1.42, 0.74);
+      box(0.08, 0.08, 0.06, this.mats[3],  0.12, 1.42, 0.74);
+      // 四条腿
+      this.legs = [];
+      for (let i = 0; i < 4; i++) {
+        const lx = i % 2 === 0 ? -0.26 : 0.26;
+        const lz = i < 2 ? -0.5 : 0.4;
+        this.legs.push(box(0.16, 0.6, 0.16, this.mats[1], lx, 0.6, lz, true));
+      }
+      this.body = box(0.7, 0.5, 1.2, this.mats[0], 0, 1.1, -0.1);
     } else { // creeper
       this.mats = [M(0x3f8f2f), M(0x2f7a22), M(0x1a1a1a), M(0x5faf3f)];
       this.legL = box(0.28, 0.7, 0.28, this.mats[2], -0.2, 0.7, 0, true);
@@ -116,6 +140,20 @@ class Zombie {
     this.hpFg.geometry.translate(-0.45, 0, 0.011);
     this.hpBg.position.set(0, 2.3, 0); this.hpFg.position.set(0, 2.3, 0);
     g.add(this.hpBg); g.add(this.hpFg);
+    // 头顶名字
+    const cnv = document.createElement('canvas');
+    cnv.width = 256; cnv.height = 72;
+    const ctx = cnv.getContext('2d');
+    ctx.font = 'bold 46px sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillStyle = 'rgba(0,0,0,0.55)';
+    ctx.fillRect(6, 6, 244, 60);
+    ctx.fillStyle = '#ffffff';
+    ctx.fillText(NAMES[t] || '怪物', 128, 36);
+    this.nameTex = new THREE.CanvasTexture(cnv);
+    this.nameSpr = new THREE.Sprite(new THREE.SpriteMaterial({ map: this.nameTex, transparent: true }));
+    this.nameSpr.scale.set(1.5, 0.42, 1);
+    this.nameSpr.position.set(0, 2.62, 0);
+    g.add(this.nameSpr);
 
     this.group = g;
     scene.add(g);
@@ -145,7 +183,7 @@ class Zombie {
     burst(this.pos.x, this.pos.y + 1, this.pos.z, col, 14, 4, 4);
     sfx.zdie();
     // 掉落物：方块物品（可拾取）
-    const drop = { zombie: EMERALD, skeleton: BONE, spider: STRING, creeper: GUNPOWDER }[this.type];
+    const drop = { zombie: EMERALD, skeleton: BONE, spider: STRING, creeper: GUNPOWDER, tiger: RAW_MEAT }[this.type];
     if (drop) {
       const n = 1 + Math.floor(Math.random() * 2);   // 1~2 个
       for (let i = 0; i < n; i++) {
@@ -279,7 +317,7 @@ class Zombie {
     // 动画
     this.walk += dt * (2 + this.speed * 2.2);
     const sw = Math.sin(this.walk * 3) * (this.speed > 0 ? 0.55 : 0.05);
-    if (this.type === 'spider') {
+    if (this.type === 'spider' || this.type === 'tiger') {
       this.legs.forEach((l, i) => { l.rotation.x = Math.sin(this.walk * 4 + i) * 0.5; });
       this.body.rotation.x = Math.sin(this.walk * 2) * 0.08;
     } else {
@@ -319,7 +357,8 @@ export function updateSpawner(dt) {
     const y = surfaceY(x, z);
     if (y < 2) continue;
     const r = Math.random();
-    const type = r < 0.45 ? 'zombie' : r < 0.7 ? 'skeleton' : r < 0.9 ? 'spider' : 'creeper';
+    const type = r < 0.36 ? 'zombie' : r < 0.56 ? 'skeleton' : r < 0.74 ? 'spider'
+             : r < 0.92 ? 'creeper' : 'tiger';
     zombies.push(new Zombie(x + 0.5, y + 1.05, z + 0.5, type));
     return;
   }

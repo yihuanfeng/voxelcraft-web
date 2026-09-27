@@ -7,6 +7,7 @@ import { LOG, PLANK, STICK, SWORD, COBBLE, STONE, SAND, COAL, CRAFT_TABLE,
          STONE_SWORD, STONE_PICK, STONE_AXE, STONE_SHOVEL, STONE_HOE,
          IRON_SWORD, IRON_PICK, IRON_AXE, IRON_SHOVEL, IRON_HOE,
          GOLD_SWORD, GOLD_PICK, GOLD_AXE, GOLD_SHOVEL, GOLD_HOE,
+         COPPER_SWORD, COPPER_PICK, COPPER_AXE, COPPER_SHOVEL, COPPER_HOE, COPPER_INGOT,
          DIAMOND_SWORD, DIAMOND_PICK, DIAMOND_AXE, DIAMOND_SHOVEL, DIAMOND_HOE,
          IRON_INGOT, GOLD_INGOT, DIAMOND, FURNACE, CHEST, TORCH, GLASS,
          STONE_BRICKS, FENCE, LADDER,
@@ -19,11 +20,11 @@ import { addItem, autoSlot } from './inventory.js';
 
 // —— 工具配方生成（原版形状）——
 const toolId = (mat, kind) => {
-  if (kind === 'sword') return mat === PLANK ? SWORD : mat === COBBLE ? STONE_SWORD : mat === IRON_INGOT ? IRON_SWORD : mat === GOLD_INGOT ? GOLD_SWORD : DIAMOND_SWORD;
-  if (kind === 'pick')  return mat === PLANK ? WOOD_PICK : mat === COBBLE ? STONE_PICK : mat === IRON_INGOT ? IRON_PICK : mat === GOLD_INGOT ? GOLD_PICK : DIAMOND_PICK;
-  if (kind === 'axe')   return mat === PLANK ? WOOD_AXE : mat === COBBLE ? STONE_AXE : mat === IRON_INGOT ? IRON_AXE : mat === GOLD_INGOT ? GOLD_AXE : DIAMOND_AXE;
-  if (kind === 'shovel')return mat === PLANK ? WOOD_SHOVEL : mat === COBBLE ? STONE_SHOVEL : mat === IRON_INGOT ? IRON_SHOVEL : mat === GOLD_INGOT ? GOLD_SHOVEL : DIAMOND_SHOVEL;
-  return mat === PLANK ? WOOD_HOE : mat === COBBLE ? STONE_HOE : mat === IRON_INGOT ? IRON_HOE : mat === GOLD_INGOT ? GOLD_HOE : DIAMOND_HOE;
+  if (kind === 'sword') return mat === PLANK ? SWORD : mat === COBBLE ? STONE_SWORD : mat === IRON_INGOT ? IRON_SWORD : mat === COPPER_INGOT ? COPPER_SWORD : mat === GOLD_INGOT ? GOLD_SWORD : DIAMOND_SWORD;
+  if (kind === 'pick')  return mat === PLANK ? WOOD_PICK : mat === COBBLE ? STONE_PICK : mat === IRON_INGOT ? IRON_PICK : mat === COPPER_INGOT ? COPPER_PICK : mat === GOLD_INGOT ? GOLD_PICK : DIAMOND_PICK;
+  if (kind === 'axe')   return mat === PLANK ? WOOD_AXE : mat === COBBLE ? STONE_AXE : mat === IRON_INGOT ? IRON_AXE : mat === COPPER_INGOT ? COPPER_AXE : mat === GOLD_INGOT ? GOLD_AXE : DIAMOND_AXE;
+  if (kind === 'shovel')return mat === PLANK ? WOOD_SHOVEL : mat === COBBLE ? STONE_SHOVEL : mat === IRON_INGOT ? IRON_SHOVEL : mat === COPPER_INGOT ? COPPER_SHOVEL : mat === GOLD_INGOT ? GOLD_SHOVEL : DIAMOND_SHOVEL;
+  return mat === PLANK ? WOOD_HOE : mat === COBBLE ? STONE_HOE : mat === IRON_INGOT ? IRON_HOE : mat === COPPER_INGOT ? COPPER_HOE : mat === GOLD_INGOT ? GOLD_HOE : DIAMOND_HOE;
 };
 function toolRecipe(mat, kind) {
   const result = toolId(mat, kind);
@@ -50,7 +51,7 @@ function armorRecipe(ing, kind, result) {
   };
 }
 
-const MATS = [PLANK, COBBLE, IRON_INGOT, GOLD_INGOT, DIAMOND];
+const MATS = [PLANK, COBBLE, IRON_INGOT, COPPER_INGOT, GOLD_INGOT, DIAMOND];
 const TOOL_KINDS = ['sword', 'pick', 'axe', 'shovel', 'hoe'];
 
 export const RECIPES = [   // 2×2 背包合成
