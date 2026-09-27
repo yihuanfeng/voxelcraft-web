@@ -327,7 +327,7 @@ window.game = {
   look(yaw, pitch) { player.yaw = yaw; player.pitch = pitch; },
   teleport(x, y, z) { player.pos.set(x, y, z); player.vel.set(0, 0, 0); },
   breakAt(x, y, z) { return breakBlock(x, y, z); },
-  placeAt(x, y, z, id) { setBlock(x, y, z, id); },
+  placeAt(x, y, z, id) { setBlock(Math.floor(x), Math.floor(y), Math.floor(z), id); },
   addItem,
   spawnZombie(x, y, z, type = 'zombie') { const zb = new Zombie(x, y, z, type); zombies.push(zb); return zb; },
   attack: tryAttack,
