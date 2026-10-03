@@ -9,11 +9,13 @@ import { LOG, PLANK, STICK, SWORD, COBBLE, STONE, SAND, COAL, CRAFT_TABLE,
          GOLD_SWORD, GOLD_PICK, GOLD_AXE, GOLD_SHOVEL, GOLD_HOE,
          COPPER_SWORD, COPPER_PICK, COPPER_AXE, COPPER_SHOVEL, COPPER_HOE, COPPER_INGOT,
          DIAMOND_SWORD, DIAMOND_PICK, DIAMOND_AXE, DIAMOND_SHOVEL, DIAMOND_HOE,
-         IRON_INGOT, GOLD_INGOT, DIAMOND, FURNACE, CHEST, TORCH, GLASS,
-         STONE_BRICKS, FENCE, LADDER,
+         IRON_INGOT, GOLD_INGOT, DIAMOND, EMERALD, FURNACE, CHEST, TORCH, GLASS,
+         STONE_BRICKS, FENCE, LADDER, GLOWSTONE,
+         IRON_BLOCK, GOLD_BLOCK, DIAMOND_BLOCK, COPPER_BLOCK, EMERALD_BLOCK, COAL_BLOCK,
          IRON_HELMET, IRON_CHESTPLATE, IRON_LEGGINGS, IRON_BOOTS,
          GOLD_HELMET, GOLD_CHESTPLATE, GOLD_LEGGINGS, GOLD_BOOTS,
          DIAMOND_HELMET, DIAMOND_CHESTPLATE, DIAMOND_LEGGINGS, DIAMOND_BOOTS,
+         COPPER_HELMET, COPPER_CHESTPLATE, COPPER_LEGGINGS, COPPER_BOOTS,
          LEATHER, LEATHER_HELMET, LEATHER_CHESTPLATE, LEATHER_LEGGINGS, LEATHER_BOOTS,
          BLOCKS } from './constants.js';
 import { addItem, autoSlot } from './inventory.js';
@@ -58,6 +60,13 @@ export const RECIPES = [   // 2×2 背包合成
   { name: '木板', result: PLANK, count: 4, pattern: [LOG, null, null, null] },
   { name: '木棍', result: STICK, count: 4, pattern: [PLANK, null, PLANK, null] },
   { name: '木剑', result: SWORD, count: 1, pattern: [PLANK, null, STICK, null] },
+  { name: '荧石', result: GLOWSTONE, count: 1, pattern: [TORCH, TORCH, TORCH, TORCH] },
+];
+
+// 储存方块：9 材料 ⇄ 1 块（工作台满铺合成，单块可拆回 9 材料）
+const BLOCK_STORE = [
+  [IRON_INGOT, IRON_BLOCK], [GOLD_INGOT, GOLD_BLOCK], [DIAMOND, DIAMOND_BLOCK],
+  [COPPER_INGOT, COPPER_BLOCK], [EMERALD, EMERALD_BLOCK], [COAL, COAL_BLOCK],
 ];
 
 export const TABLE_RECIPES = [   // 3×3 工作台合成（原版主要类别）
@@ -90,6 +99,17 @@ export const TABLE_RECIPES = [   // 3×3 工作台合成（原版主要类别）
   armorRecipe(GOLD_INGOT, 'leggings', GOLD_LEGGINGS), armorRecipe(GOLD_INGOT, 'boots', GOLD_BOOTS),
   armorRecipe(DIAMOND, 'helmet', DIAMOND_HELMET), armorRecipe(DIAMOND, 'chestplate', DIAMOND_CHESTPLATE),
   armorRecipe(DIAMOND, 'leggings', DIAMOND_LEGGINGS), armorRecipe(DIAMOND, 'boots', DIAMOND_BOOTS),
+  // 铜盔甲（4 件）
+  armorRecipe(COPPER_INGOT, 'helmet', COPPER_HELMET), armorRecipe(COPPER_INGOT, 'chestplate', COPPER_CHESTPLATE),
+  armorRecipe(COPPER_INGOT, 'leggings', COPPER_LEGGINGS), armorRecipe(COPPER_INGOT, 'boots', COPPER_BOOTS),
+  // 储存方块：9 材料 → 1 块
+  ...BLOCK_STORE.map(([mat, block]) => ({
+    name: BLOCKS[block].name, result: block, count: 1, pattern: new Array(9).fill(mat),
+  })),
+  // 储存方块逆向：1 块 → 9 材料（单格即可匹配）
+  ...BLOCK_STORE.map(([mat, block]) => ({
+    name: '拆解' + BLOCKS[block].name, result: mat, count: 9, pattern: [block],
+  })),
 ];
 
 export const craftSlots = [null, null, null, null];       // 2×2 合成格

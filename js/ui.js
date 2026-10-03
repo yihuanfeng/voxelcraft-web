@@ -11,10 +11,11 @@ import { BLOCKS, atlas,
          IRON_HELMET, IRON_CHESTPLATE, IRON_LEGGINGS, IRON_BOOTS,
          GOLD_HELMET, GOLD_CHESTPLATE, GOLD_LEGGINGS, GOLD_BOOTS,
          DIAMOND_HELMET, DIAMOND_CHESTPLATE, DIAMOND_LEGGINGS, DIAMOND_BOOTS,
+         COPPER_HELMET, COPPER_CHESTPLATE, COPPER_LEGGINGS, COPPER_BOOTS,
          EMERALD, BONE, STRING, GUNPOWDER, ARMOR, ARMOR_SLOTS, recommendTool,
          BLOCK_TIER, TOOL_TIER } from './constants.js';
 import { inv, invSlots, hotbar, sel, setSel, setHotbarSlot, addItem, removeItem,
-         itemCount, inventoryEvents, armorSlots, wearArmor, takeOffArmor, armorDefense } from './inventory.js';
+         itemCount, inventoryEvents, armorSlots, wearArmor, takeOffArmor } from './inventory.js';
 import { craftSlots, tableSlots, RECIPES, TABLE_RECIPES,
          matchCraftRecipe, matchTableRecipe, craftOnce, blockName,
          craftEvents, setTableOpen, tableOpen } from './crafting.js';
@@ -68,6 +69,8 @@ const KIND_BY_ID = {
   [GOLD_LEGGINGS]: ['legs', 'gold'], [GOLD_BOOTS]: ['boots', 'gold'],
   [DIAMOND_HELMET]: ['helmet', 'diamond'], [DIAMOND_CHESTPLATE]: ['chest', 'diamond'],
   [DIAMOND_LEGGINGS]: ['legs', 'diamond'], [DIAMOND_BOOTS]: ['boots', 'diamond'],
+  [COPPER_HELMET]: ['helmet', 'copper'], [COPPER_CHESTPLATE]: ['chest', 'copper'],
+  [COPPER_LEGGINGS]: ['legs', 'copper'], [COPPER_BOOTS]: ['boots', 'copper'],
 };
 
 function drawSpecial(ctx, size, kind, mat) {
@@ -431,6 +434,10 @@ export function openInventory() {
 export function closeInventory() {
   inventoryOpen = false;
   selectedInvItem = null;
+  // 合成格里的材料全部退回背包
+  for (let i = 0; i < craftSlots.length; i++) {
+    if (craftSlots[i] != null) { addItem(craftSlots[i], 1); craftSlots[i] = null; }
+  }
   $('inventoryUI').style.display = 'none';
 }
 
@@ -440,23 +447,21 @@ function makeSlotCv(size) {
   return cv;
 }
 
+const ARMOR_SLOT_HINT = { head: '头盔', chest: '胸甲', legs: '护腿', feet: '靴子' };
 function renderArmor() {
   const grid = $('armorGrid');
   grid.innerHTML = '';
-  const labels = { head: '头盔', chest: '胸甲', legs: '护腿', feet: '靴子' };
-  ARMOR_SLOTS.forEach((slot, i) => {
+  ARMOR_SLOTS.forEach(slot => {
     const id = armorSlots[slot];
     const d = document.createElement('div');
     d.className = 'armor-slot is-slot' + (id ? '' : ' empty');
     if (id) {
-      const cv = makeSlotCv(40);
+      const cv = makeSlotCv(36);
       drawItemIcon(cv, id);
       d.appendChild(cv);
-      d.title = BLOCKS[id].name + '（防御 ' + ARMOR[id].defense + '）';
+      d.title = BLOCKS[id].name + '（防御 ' + ARMOR[id].defense + '，点击脱下）';
     } else {
-      const lbl = document.createElement('span');
-      lbl.className = 'armor-label'; lbl.textContent = labels[slot];
-      d.appendChild(lbl);
+      d.title = ARMOR_SLOT_HINT[slot] + '槽（选中盔甲后点击穿戴）';
     }
     d.addEventListener('click', () => {
       if (selectedInvItem != null && ARMOR[selectedInvItem] && ARMOR[selectedInvItem].slot === slot) {
@@ -469,8 +474,45 @@ function renderArmor() {
     });
     grid.appendChild(d);
   });
-  const def = armorDefense();
-  $('armorDef').textContent = '总防御：' + def + ' 点';
+}
+
+// 盔甲材质颜色（按 ID 段判断）
+function armorMatColor(id) {
+  if (id == null) return null;
+  if (id >= LEATHER_HELMET && id <= LEATHER_BOOTS) return '#9c7247';
+  if (id >= IRON_HELMET && id <= IRON_BOOTS) return '#d8d8d8';
+  if (id >= GOLD_HELMET && id <= GOLD_BOOTS) return '#f2c94c';
+  if (id >= DIAMOND_HELMET && id <= DIAMOND_BOOTS) return '#5fd6c6';
+  if (id >= 95 && id <= 98) return '#d9834a';   // 铜盔甲
+  return '#bbbbbb';
+}
+
+// 角色小人：像素风，按盔甲槽实时叠加装备
+function renderPlayerModel() {
+  const cv = $('playerModel');
+  if (!cv) return;
+  const ctx = cv.getContext('2d');
+  ctx.clearRect(0, 0, cv.width, cv.height);
+  const U = 4, ox = 16;   // 16×32 逻辑像素，每格 4px，水平居中
+  const px = (x, y, w, h, c) => { ctx.fillStyle = c; ctx.fillRect(ox + x * U, y * U, w * U, h * U); };
+  const skin = '#cf9b74', shirt = '#35698f', pants = '#34384a';
+  // 双腿、身体、双臂
+  px(4, 20, 4, 12, pants); px(8, 20, 4, 12, pants);
+  px(4, 8, 8, 12, shirt);
+  px(0, 8, 4, 12, shirt); px(12, 8, 4, 12, shirt);
+  px(0, 17, 4, 3, skin); px(12, 17, 4, 3, skin);   // 手
+  // 头 + 眼睛
+  px(4, 0, 8, 8, skin);
+  px(6, 3, 1, 1, '#2b2b3a'); px(9, 3, 1, 1, '#2b2b3a');
+  // 装备叠加（靴子 → 护腿 → 胸甲 → 头盔）
+  const feet = armorMatColor(armorSlots.feet);
+  const legs = armorMatColor(armorSlots.legs);
+  const chest = armorMatColor(armorSlots.chest);
+  const head = armorMatColor(armorSlots.head);
+  if (feet) { px(4, 28, 4, 4, feet); px(8, 28, 4, 4, feet); }
+  if (legs) { px(4, 20, 4, 9, legs); px(8, 20, 4, 9, legs); }
+  if (chest) { px(4, 8, 8, 12, chest); px(0, 8, 4, 5, chest); px(12, 8, 4, 5, chest); }
+  if (head) { px(4, 0, 8, 4, head); px(4, 1, 1, 3, head); px(11, 1, 1, 3, head); }
 }
 
 function renderInventoryGrid() {
@@ -569,27 +611,80 @@ function renderCraftArea() {
   } else {
     res.classList.add('empty');
   }
-  renderRecipeList(RECIPES, $('recipeList'));
+  renderRecipeBook(RECIPES, $('recipeList'), craftSlots, 2);
 }
 
-// 配方需求文本（从 pattern 统计）
-function recipeMats(r) {
+// 配方所需材料统计（从 pattern）
+function recipeNeeds(r) {
   const counts = {};
   for (const m of r.pattern) if (m != null) counts[m] = (counts[m] || 0) + 1;
-  return Object.entries(counts).map(([id, n]) => `${blockName(+id)}×${n}`).join(' ');
+  return counts;
 }
-function renderRecipeList(recipes, list) {
+// 玩家当前可用材料数（背包 + 快捷栏手持）
+function availCount(id) {
+  let c = itemCount(id);
+  for (const h of hotbar) if (h === id) c++;
+  return c;
+}
+function canCraftRecipe(r) {
+  const need = recipeNeeds(r);
+  return Object.entries(need).every(([id, n]) => availCount(+id) >= n);
+}
+// 从背包、再从快捷栏取 n 个材料
+function takeMaterial(id, n) {
+  const inInv = itemCount(id);
+  const fromInv = Math.min(inInv, n);
+  if (fromInv > 0) removeItem(id, fromInv);
+  let remain = n - fromInv;
+  while (remain > 0) {
+    const i = hotbar.indexOf(id);
+    if (i < 0) return false;
+    setHotbarSlot(i, null);
+    remain--;
+  }
+  return true;
+}
+// 点击配方书：退回合成格现有材料，自动把所需材料摆入
+function autoPlaceRecipe(r, slots, W) {
+  for (let i = 0; i < slots.length; i++) {
+    if (slots[i] != null) { addItem(slots[i], 1); slots[i] = null; }
+  }
+  const need = recipeNeeds(r);
+  if (!Object.entries(need).every(([id, n]) => availCount(+id) >= n)) return false;
+  for (const [id, n] of Object.entries(need)) takeMaterial(+id, n);
+  for (let i = 0; i < W * W; i++) slots[i] = r.pattern[i] != null ? r.pattern[i] : null;
+  return true;
+}
+// 配方书：成品图标横滑，能合成绿勾可点击，不能合成灰显红叉
+function renderRecipeBook(recipes, list, slots, W) {
   list.innerHTML = '';
   recipes.forEach(r => {
+    const can = canCraftRecipe(r);
     const d = document.createElement('div');
-    d.className = 'recipe';
-    d.innerHTML = `<b>${r.name}</b><span class="r-mats">${recipeMats(r)}</span><span class="r-out">→ ${r.name}×${r.count}</span>`;
+    d.className = 'recipe-cell ' + (can ? 'can' : 'cant');
+    const cv = makeSlotCv(36);
+    drawItemIcon(cv, r.result);
+    d.appendChild(cv);
+    const mark = document.createElement('span');
+    mark.className = 'mark ' + (can ? 'ok' : 'no');
+    mark.textContent = can ? '✓' : '✕';
+    d.appendChild(mark);
+    const mats = Object.entries(recipeNeeds(r))
+      .map(([id, n]) => blockName(+id) + '×' + n).join(' ');
+    d.title = r.name + ' ×' + r.count + '（需要：' + mats + '）' + (can ? '　点击自动摆放' : '　材料不足');
+    if (can) d.addEventListener('click', () => {
+      if (!autoPlaceRecipe(r, slots, W)) return;
+      craftEvents.dispatchEvent(new CustomEvent('change'));
+      if (inventoryOpen) renderInventory();
+      if (tableOpen) renderTable();
+    });
     list.appendChild(d);
   });
 }
 
 export function renderInventory() {
   renderArmor();
+  renderPlayerModel();
   renderInventoryGrid();
   renderInventoryHotbar();
   renderCraftArea();
@@ -629,7 +724,7 @@ function renderTable() {
   }
   renderTableInvGrid();
   renderTableHotbar();
-  renderRecipeList(TABLE_RECIPES, $('tableRecipeList'));
+  renderRecipeBook(TABLE_RECIPES, $('tableRecipeList'), tableSlots, 3);
 }
 
 function renderTableInvGrid() {
@@ -769,14 +864,15 @@ export function bindTableUI() {
 ================================================================ */
 inventoryEvents.addEventListener('invchange', () => {
   renderHotbarHud();
-  if (inventoryOpen) renderInventoryGrid();
+  if (inventoryOpen) renderInventory();
+  if (tableOpen) renderTable();
 });
 inventoryEvents.addEventListener('selchange', () => {
   renderHotbarHud();
   if (inventoryOpen) renderInventory();
 });
 inventoryEvents.addEventListener('armorchange', () => {
-  if (inventoryOpen) renderArmor();
+  if (inventoryOpen) { renderArmor(); renderPlayerModel(); }
 });
 craftEvents.addEventListener('change', () => {
   if (inventoryOpen) renderCraftArea();

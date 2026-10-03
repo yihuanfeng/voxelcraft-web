@@ -22,11 +22,11 @@
 | `js/noise.js` | 确定性噪声（hash + valueNoise + fbm） |
 | `js/renderer.js` | Three.js 渲染、区块网格、粒子/掉落物、`aimBlock`、分帧构建队列 |
 | `js/player.js` | 玩家物理、挖掘/放置、伤害（含盔甲减伤）、死亡/重生 |
-| `js/inventory.js` | 背包 16 格、快捷栏 9 格、盔甲槽、物品计数、`inventoryEvents` |
-| `js/crafting.js` | 2×2/3×3 合成（形状匹配）、50+ 配方、`craftEvents` |
-| `js/zombies.js` | 怪物：僵尸/骷髅/蜘蛛/苦力怕、刷怪器、骷髅箭 |
+| `js/inventory.js` | 背包 27 格（3×9）、快捷栏 9 格、盔甲槽、物品计数、`inventoryEvents` |
+| `js/crafting.js` | 2×2/3×3 合成（形状匹配）、70+ 配方（含储存块正/逆向、铜盔甲）、`craftEvents` |
+| `js/zombies.js` | 怪物：僵尸/骷髅/蜘蛛/苦力怕/老虎、刷怪器、骷髅箭 |
 | `js/villagers.js` | 村庄村民 NPC |
-| `js/ui.js` | HUD、三段式背包/工作台界面、物品图标绘制、事件订阅 |
+| `js/ui.js` | HUD、原版布局背包/工作台、配方书（勾叉+自动摆放）、角色小人、物品图标 |
 | `js/save.js` | localStorage 存档（方块差异 + 玩家状态 + 时间） |
 | `js/audio.js` | WebAudio 音效 |
 | `css/main.css` | 全部样式 |
@@ -57,7 +57,7 @@ zombies.js → constants / world / player / renderer / audio
 
 - key：`voxelcraft_save_v1`；结构 `{ v:1, world:{方块差异}, player:{位置/背包/快捷栏/盔甲/dim}, time }`
 - 新增玩家字段：`flushSave()` 写入 + `applyPlayerSave()` 恢复 + 旧存档缺省值处理
-- 背包是 16 格 `invSlots`（每格 `{id,count}|null`），`inv` 是 id→count 派生视图；旧格式 `inv` 对象自动迁移
+- 背包是 27 格 `invSlots`（3×9，每格 `{id,count}|null`），`inv` 是 id→count 派生视图；旧 16 格存档按长度自动补空、更旧的 `inv` 对象自动迁移
 - 设置（和平模式）在 `voxelcraft_settings_v1`
 
 ### 无限世界（必须遵守）
@@ -72,20 +72,23 @@ zombies.js → constants / world / player / renderer / audio
 
 ### 合成（crafting.js）
 
-- `RECIPES`（2×2，3 条）/ `TABLE_RECIPES`（3×3，50 条）
-- pattern 是 3×3 数组，`null` 为空；`normPattern` 去空行空列，`matchGrid` 允许整体平移、区域内无多余材料
+- `RECIPES`（2×2，4 条：木板/木棍/木剑/荧石）/ `TABLE_RECIPES`（3×3，71 条：工作台等杂项 + 6 材质×5 工具 + 5 材质×4 盔甲 + 6 储存块正逆向）
+- pattern 是 W×W 数组（单元素数组也行，normPattern 按 W 读取，越界当空），`null` 为空；`normPattern` 去空行空列，`matchGrid` 允许整体平移、区域内无多余材料
 - 执行：`craftOnce(recipe, slots, hit, W)`（W=2 或 3）
 - 工具配方用 `toolRecipe(mat, kind)`；盔甲配方用 `armorRecipe(ing, kind, result)`（**ing 是材料**，result 是成品，别把成品当材料）
+- 储存块用 `BLOCK_STORE` 表自动生成正向（9 材料满铺→块）与逆向（单格块→9 材料）两条
 - UI 点击合成时用 `matchCraftRecipe()/matchTableRecipe()` 返回 `{recipe, hit}`
+- 配方书：`renderRecipeBook(recipes, list, slots, W)`；`canCraftRecipe` 按背包+快捷栏可用材料（`availCount`）判定，点击可合成项调 `autoPlaceRecipe` 先退旧料再自动摆入，玩家再点结果格取走
 
 ### 新增物品/方块清单
 
 1. `constants.js` 加 ID（数值注意不与已有冲突）
-2. 方块：加进 `PLACEABLE_IDS` + `BLOCKS`（name/hard/tiles/color；半透明加 `transparent:true`）+ 图集 `tile()`（共 34 格，16×16 图集最多 256 格）
+2. 方块：加进 `PLACEABLE_IDS` + `BLOCKS`（name/hard/tiles/color；半透明加 `transparent:true`）+ 图集 `tile()`（已用到 tile 40，16×16 图集最多 256 格）
 3. 工具：加进 `SWORDS/PICKS/AXES/SHOVELS/HOES` + `TOOL_DAMAGE` + `TOOL_SPEED`
-4. 盔甲：加进 `ARMOR_SLOTS/ARMOR`（defense）
+4. 盔甲：加进 `ARMOR_SLOTS/ARMOR`（defense）；角色小人着色在 `ui.js armorMatColor()` 按 ID 段加分支
 5. **图标**：`ui.js` 的 `KIND_BY_ID` 注册手绘（`drawSpecial` 加分支）；方块自动截取图集。**不注册 = 无图标**
 6. `crafting.js` 加配方；`world.js` 如需自然生成
+7. 已用 ID 段：工具 25-38/50-59、盔甲 60-75 与 95-98（铜）、材料 76-88、储存块 89-94；新物品从 99 起
 
 ### 新增怪物（zombies.js）
 
@@ -97,10 +100,11 @@ zombies.js → constants / world / player / renderer / audio
 
 ### UI（ui.js）
 
-- 背包是**三段式**：顶部合成区（2×2+结果+配方）、中部库存+盔甲栏（`armorGrid`）、底部快捷栏（`invHotbar`）
-- 工作台同三段式（3×3）：`tableInvGrid` + `tableHotbar` 是独立容器
-- 交互模型：点击物品格选中（`selectedInvItem`）→ 点击目标格放入；快捷栏格点击=移回背包/交换
-- 事件驱动刷新：`inventoryEvents('invchange'/'selchange'/'armorchange')`、`craftEvents('change')`、`playerEvents('healthchange'/'death'/'respawn')`
+- 背包是**原版紧凑布局**（`mc-panel`，少文字）：顶行左侧合成区（2×2 格 → 箭头 → 结果格）、右侧角色小人 canvas（`playerModel`，按盔甲槽实时叠加装备）+ 盔甲竖槽（`armorGrid`）；其下配方书横滑条（`recipeList`，3 行图标，✓可合成/✕材料不足）；底部背包 3×9（`invGrid`）与快捷栏 1×9（`invHotbar`）在同一 `mc-bag` 容器内紧贴
+- 工作台同构（3×3，无小人/盔甲栏）：`tableRecipeList`、`tableInvGrid`、`tableHotbar`
+- 交互模型：点击物品格选中（`selectedInvItem`）→ 点击目标格放入；快捷栏格点击=移回背包/交换；配方书可合成项点击=自动摆放材料；关闭背包/工作台时合成格材料自动退回
+- 角色小人为 2D 像素绘制（`renderPlayerModel`，16×32 逻辑像素），盔甲颜色按 ID 段映射
+- 事件驱动刷新：`inventoryEvents('invchange'/'selchange'/'armorchange')`、`craftEvents('change')`、`playerEvents('healthchange'/'death'/'respawn')`；背包/工作台开着时 invchange 要全刷（配方书勾叉随材料变化）
 
 ## 验证流程（改完必须做）
 

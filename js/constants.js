@@ -33,7 +33,12 @@ export const AIR = 0, GRASS = 1, DIRT = 2, STONE = 3, LOG = 4, LEAVES = 5,
              DIAMOND_HELMET = 72, DIAMOND_CHESTPLATE = 73, DIAMOND_LEGGINGS = 74, DIAMOND_BOOTS = 75,
              LEATHER = 76, EMERALD = 77, BONE = 78, STRING = 79, GUNPOWDER = 80,
              RAW_MEAT = 81, COPPER_ORE = 82, COPPER_INGOT = 83,
-             COPPER_SWORD = 84, COPPER_PICK = 85, COPPER_AXE = 86, COPPER_SHOVEL = 87, COPPER_HOE = 88;
+             COPPER_SWORD = 84, COPPER_PICK = 85, COPPER_AXE = 86, COPPER_SHOVEL = 87, COPPER_HOE = 88,
+             // 储存方块（9 个材料合成一块，可逆向拆回）
+             IRON_BLOCK = 89, GOLD_BLOCK = 90, DIAMOND_BLOCK = 91, COPPER_BLOCK = 92,
+             EMERALD_BLOCK = 93, COAL_BLOCK = 94,
+             // 铜盔甲
+             COPPER_HELMET = 95, COPPER_CHESTPLATE = 96, COPPER_LEGGINGS = 97, COPPER_BOOTS = 98;
 
 // 可放置为方块的 ID 集合（方块类；物品/工具/盔甲不可放置）
 export const PLACEABLE_IDS = new Set([
@@ -41,6 +46,7 @@ export const PLACEABLE_IDS = new Set([
   COAL_ORE, IRON_ORE, GOLD_ORE, DIAMOND_ORE, LAVA, OBSIDIAN, CRAFT_TABLE,
   NETHERRACK, GLOWSTONE, PORTAL, ANCIENT_DEBRIS,
   FURNACE, CHEST, TORCH, GLASS, STONE_BRICKS, FENCE, LADDER,
+  IRON_BLOCK, GOLD_BLOCK, DIAMOND_BLOCK, COPPER_BLOCK, EMERALD_BLOCK, COAL_BLOCK,
 ]);
 export function isPlaceable(id) { return PLACEABLE_IDS.has(id); }
 
@@ -133,6 +139,10 @@ export const ARMOR = {
   [DIAMOND_CHESTPLATE]:{ slot: 'chest', defense: 8 },
   [DIAMOND_LEGGINGS]:  { slot: 'legs',  defense: 6 },
   [DIAMOND_BOOTS]:     { slot: 'feet',  defense: 3 },
+  [COPPER_HELMET]:     { slot: 'head',  defense: 2 },
+  [COPPER_CHESTPLATE]: { slot: 'chest', defense: 4 },
+  [COPPER_LEGGINGS]:   { slot: 'legs',  defense: 3 },
+  [COPPER_BOOTS]:      { slot: 'feet',  defense: 1 },
 };
 
 // tiles: 16x16 纹理图集中的索引
@@ -225,6 +235,18 @@ export const BLOCKS = {
   [DIAMOND_CHESTPLATE]:{ name:'钻石胸甲', hard:0, tiles:{ all:15 }, color:0x6fe3d0 },
   [DIAMOND_LEGGINGS]:  { name:'钻石护腿', hard:0, tiles:{ all:15 }, color:0x6fe3d0 },
   [DIAMOND_BOOTS]:     { name:'钻石靴子', hard:0, tiles:{ all:15 }, color:0x6fe3d0 },
+  // 储存方块
+  [IRON_BLOCK]:    { name:'铁块',   hard:4.0, tiles:{ all:35 }, color:0xd8d8d8 },
+  [GOLD_BLOCK]:    { name:'金块',   hard:3.5, tiles:{ all:36 }, color:0xffdf6e },
+  [DIAMOND_BLOCK]: { name:'钻石块', hard:4.5, tiles:{ all:37 }, color:0x6fe3d0 },
+  [COPPER_BLOCK]:  { name:'铜块',   hard:4.0, tiles:{ all:38 }, color:0xd98a4a },
+  [EMERALD_BLOCK]: { name:'绿宝石块', hard:4.0, tiles:{ all:39 }, color:0x3fd95f },
+  [COAL_BLOCK]:    { name:'煤炭块', hard:4.0, tiles:{ all:40 }, color:0x1f1f1f },
+  // 铜盔甲
+  [COPPER_HELMET]:    { name:'铜头盔', hard:0, tiles:{ all:8 }, color:0xd98a4a },
+  [COPPER_CHESTPLATE]:{ name:'铜胸甲', hard:0, tiles:{ all:8 }, color:0xd98a4a },
+  [COPPER_LEGGINGS]:  { name:'铜护腿', hard:0, tiles:{ all:8 }, color:0xd98a4a },
+  [COPPER_BOOTS]:     { name:'铜靴子', hard:0, tiles:{ all:8 }, color:0xd98a4a },
 };
 
 // 盔甲 / 工具 外观配色（UI 图标与玩家模型）
@@ -408,6 +430,41 @@ export function buildAtlas() {
   tile(34, (x, y) => {
     const stone = 0.78 + hash(x, y) * 0.1;
     return (x % 5 === 0 && y % 5 === 0) ? shade(207, 138, 58, 1) : shade(125*stone, 125*stone, 125*stone, 1);
+  });
+  // 35 铁块
+  tile(35, (x, y) => {
+    if (x === 0 || y === 0) return shade(205, 205, 212, 1);
+    if (x === 15 || y === 15) return shade(120, 120, 128, 1);
+    return noisy(182, 182, 188, 0.1);
+  });
+  // 36 金块
+  tile(36, (x, y) => {
+    if (x === 0 || y === 0) return shade(255, 232, 120, 1);
+    if (x === 15 || y === 15) return shade(170, 130, 30, 1);
+    return noisy(242, 202, 82, 0.1);
+  });
+  // 37 钻石块
+  tile(37, (x, y) => {
+    if (x === 0 || y === 0) return shade(140, 240, 225, 1);
+    if (x === 15 || y === 15) return shade(50, 150, 140, 1);
+    return noisy(95, 215, 200, 0.12);
+  });
+  // 38 铜块
+  tile(38, (x, y) => {
+    if (x === 0 || y === 0) return shade(235, 160, 90, 1);
+    if (x === 15 || y === 15) return shade(140, 80, 35, 1);
+    return noisy(205, 130, 70, 0.12);
+  });
+  // 39 绿宝石块
+  tile(39, (x, y) => {
+    if (x === 0 || y === 0) return shade(110, 235, 120, 1);
+    if (x === 15 || y === 15) return shade(30, 120, 45, 1);
+    return noisy(70, 205, 90, 0.12);
+  });
+  // 40 煤炭块
+  tile(40, (x, y) => {
+    if (x === 0 || y === 0) return shade(64, 64, 64, 1);
+    return noisy(28, 28, 28, 0.35);
   });
 
   const tex = new THREE.CanvasTexture(cv);

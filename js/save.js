@@ -34,7 +34,7 @@ export function applyPlayerSave() {
     player.pos.set(p.x, p.y, p.z);
     player.yaw = p.yaw; player.pitch = p.pitch;
     player.hp = p.hp; player.fly = !!p.fly;
-    // 背包：新格式 invSlots（16 格）；旧格式 inv（id->count 对象）自动迁移
+    // 背包：新格式 invSlots（27 格）；旧 16 格存档自动补空；更旧格式 inv（id->count 对象）自动迁移
     for (let i = 0; i < invSlots.length; i++) invSlots[i] = null;
     if (Array.isArray(p.invSlots)) {
       for (let i = 0; i < Math.min(p.invSlots.length, invSlots.length); i++) {

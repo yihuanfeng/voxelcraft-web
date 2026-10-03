@@ -1,9 +1,10 @@
 /* ================================================================
-   背包（固定 16 格）/ 快捷栏 / 选中格 / 盔甲槽
-   初始背包为空：物品通过挖掘收集，可放入 16 格背包 + 9 格快捷栏
+   背包（27 格，3×9 原版布局）/ 快捷栏 / 选中格 / 盔甲槽
+   初始背包为空：物品通过挖掘收集，可放入 27 格背包 + 9 格快捷栏
+   旧存档 16 格自动兼容（save.js 按长度迁移，后 11 格为空）
 ================================================================ */
 import { ARMOR, ARMOR_SLOTS } from './constants.js';
-export const invSlots = new Array(16).fill(null);   // 每格 {id, count} | null
+export const invSlots = new Array(27).fill(null);   // 每格 {id, count} | null
 export const inv = {};                              // id -> 总数（派生视图，供存档/钩子使用）
 export const hotbar = new Array(9).fill(null);      // 快捷栏 9 格（物品 id 或 null）
 export let sel = 0;                                 // 当前选中的快捷栏格
