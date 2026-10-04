@@ -22,7 +22,7 @@
 | `js/noise.js` | 确定性噪声（hash + valueNoise + fbm） |
 | `js/renderer.js` | Three.js 渲染、区块网格、粒子/掉落物、`aimBlock`、分帧构建队列 |
 | `js/player.js` | 玩家物理、挖掘/放置、伤害（含盔甲减伤）、死亡/重生 |
-| `js/inventory.js` | 背包 27 格（3×9）、快捷栏 9 格、盔甲槽、物品计数、`inventoryEvents` |
+| `js/inventory.js` | 库存 36 格（同一套格子：0-8 快捷栏 + 9-35 背包）、盔甲槽、物品计数、`inventoryEvents` |
 | `js/crafting.js` | 2×2/3×3 合成（形状匹配）、70+ 配方（含储存块正/逆向、铜盔甲）、`craftEvents` |
 | `js/zombies.js` | 怪物：僵尸/骷髅/蜘蛛/苦力怕/老虎、刷怪器、骷髅箭 |
 | `js/villagers.js` | 村庄村民 NPC |
@@ -55,9 +55,9 @@ zombies.js → constants / world / player / renderer / audio
 
 ### 存档（save.js）
 
-- key：`voxelcraft_save_v1`；结构 `{ v:1, world:{方块差异}, player:{位置/背包/快捷栏/盔甲/dim}, time }`
+- key：`voxelcraft_save_v1`；结构 `{ v:1, world:{方块差异}, player:{位置/库存/盔甲/dim}, time }`
 - 新增玩家字段：`flushSave()` 写入 + `applyPlayerSave()` 恢复 + 旧存档缺省值处理
-- 背包是 27 格 `invSlots`（3×9，每格 `{id,count}|null`），`inv` 是 id→count 派生视图；旧 16 格存档按长度自动补空、更旧的 `inv` 对象自动迁移
+- 库存是 **36 格 `invSlots`**（每格 `{id,count}|null`，`invSlots[0..8]`=快捷栏、`[9..35]`=背包；快捷栏是背包的一部分，同一库存不重复计数），`inv` 是 id→count 派生视图；旧 16/27 格存档按长度自动迁移（背包放 9+i，旧 `hotbar` 引用物品从背包扣 1 放回快捷栏），更旧的 `inv` 对象同样迁移
 - 设置（和平模式）在 `voxelcraft_settings_v1`
 
 ### 无限世界（必须遵守）
@@ -78,7 +78,7 @@ zombies.js → constants / world / player / renderer / audio
 - 工具配方用 `toolRecipe(mat, kind)`；盔甲配方用 `armorRecipe(ing, kind, result)`（**ing 是材料**，result 是成品，别把成品当材料）
 - 储存块用 `BLOCK_STORE` 表自动生成正向（9 材料满铺→块）与逆向（单格块→9 材料）两条
 - UI 点击合成时用 `matchCraftRecipe()/matchTableRecipe()` 返回 `{recipe, hit}`
-- 配方书：`renderRecipeBook(recipes, list, slots, W)`；`canCraftRecipe` 按背包+快捷栏可用材料（`availCount`）判定，点击可合成项调 `autoPlaceRecipe` 先退旧料再自动摆入，玩家再点结果格取走
+- 配方书：`renderRecipeBook(list, recipes)`（第一个参数是容器元素）；背包配方书=**全部配方** `[...RECIPES, ...TABLE_RECIPES]`（75 条），工作台配方书= `TABLE_RECIPES`；`canCraftRecipe` 按整个库存 `itemCount` 判定，点击可合成项调 `autoPlaceRecipe`（按 pattern 长度判 W：`length===4` 摆 2×2 `craftSlots`，否则摆 3×3 `tableSlots`，工作台未开时自动 `closeInventory()+openTable()`）
 
 ### 新增物品/方块清单
 
@@ -100,9 +100,9 @@ zombies.js → constants / world / player / renderer / audio
 
 ### UI（ui.js）
 
-- 背包是**原版紧凑布局**（`mc-panel`，少文字）：顶行左侧合成区（2×2 格 → 箭头 → 结果格）、右侧角色小人 canvas（`playerModel`，按盔甲槽实时叠加装备）+ 盔甲竖槽（`armorGrid`）；其下配方书横滑条（`recipeList`，3 行图标，✓可合成/✕材料不足）；底部背包 3×9（`invGrid`）与快捷栏 1×9（`invHotbar`）在同一 `mc-bag` 容器内紧贴
+- 背包/工作台是**两栏原版布局**（`mc-panel > mc-body`）：左栏配方书（`.recipe-book`，3 列纵向滚动，✓可合成/✕材料不足），右栏顶部合成区（2×2/3×3 → 箭头 → 结果格，背包右上有角色小人 `playerModel` + 盔甲竖槽 `armorGrid`），右栏底部背包 3×9（`invGrid`，只渲染 9-35）与快捷栏 1×9（`invHotbar`，只渲染 0-8）在同一 `mc-bag` 容器内紧贴
 - 工作台同构（3×3，无小人/盔甲栏）：`tableRecipeList`、`tableInvGrid`、`tableHotbar`
-- 交互模型：点击物品格选中（`selectedInvItem`）→ 点击目标格放入；快捷栏格点击=移回背包/交换；配方书可合成项点击=自动摆放材料；关闭背包/工作台时合成格材料自动退回
+- 交互模型：点击库存格选中（`selectedSlot`，invSlots 全局索引）→ 再点另一格 `moveSlot` 整格交换；快捷栏格点击顺带 `setSel`；HTML5 拖放 `slotDnd`（data JSON `{i:库存索引}` 或 `{c:合成格索引}`）：库存↔库存整格交换、合成格→库存退回 `addItem`、库存→合成格 `removeItemAt(src,1)` 放入、合成格间移动；点击配方书可合成项=自动摆放材料；关闭背包/工作台时合成格材料自动退回
 - 角色小人为 2D 像素绘制（`renderPlayerModel`，16×32 逻辑像素），盔甲颜色按 ID 段映射
 - 事件驱动刷新：`inventoryEvents('invchange'/'selchange'/'armorchange')`、`craftEvents('change')`、`playerEvents('healthchange'/'death'/'respawn')`；背包/工作台开着时 invchange 要全刷（配方书勾叉随材料变化）
 
@@ -126,4 +126,5 @@ zombies.js → constants / world / player / renderer / audio
 - 苦力怕模型缺 armL/armR → 每帧 Uncaught TypeError
 - 清档后 pagehide 会把内存旧状态写回 → `disableSave()` 守卫
 - 滚轮切换快捷栏已移除（误触），只保留数字键/点击
-- 测试动过用户存档后要恢复干净状态，别留测试物品
+- 测试动过用户存档后要恢复干净状态，别留测试物品（**恢复基准**：位置 256,28,256、hp20、无盔甲、快捷栏 7 格 id 序 `[10,42,5,1,2,79,11]` 各 1、背包 `9+i` 放 `[[10,47],[42,1],[5,3],[1,2],[2,2],[11,1],[39,1]]`）
+- 迁移旧档后测试前先确认页面 `started` 状态：未点开始前 pagehide 不会写回，可直接改 localStorage 重测迁移

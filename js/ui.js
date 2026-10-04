@@ -14,12 +14,11 @@ import { BLOCKS, atlas,
          COPPER_HELMET, COPPER_CHESTPLATE, COPPER_LEGGINGS, COPPER_BOOTS,
          EMERALD, BONE, STRING, GUNPOWDER, ARMOR, ARMOR_SLOTS, recommendTool,
          BLOCK_TIER, TOOL_TIER } from './constants.js';
-import { inv, invSlots, hotbar, sel, setSel, setHotbarSlot, addItem, removeItem,
-         itemCount, inventoryEvents, armorSlots, wearArmor, takeOffArmor } from './inventory.js';
+import { inv, invSlots, sel, setSel, addItem, removeItem, removeItemAt, moveSlot,
+         itemCount, inventoryEvents, armorSlots, wearArmorAt, takeOffArmor, selectedHotbarId } from './inventory.js';
 import { craftSlots, tableSlots, RECIPES, TABLE_RECIPES,
          matchCraftRecipe, matchTableRecipe, craftOnce, blockName,
          craftEvents, setTableOpen, tableOpen } from './crafting.js';
-import { selectedHotbarId } from './inventory.js';
 import { player, playerEvents, mining } from './player.js';
 import { zombies } from './zombies.js';
 import { worldTime, isDay, renderer } from './renderer.js';
@@ -228,12 +227,13 @@ export function buildHotbarHud() {
 }
 export function renderHotbarHud() {
   hudSlots.forEach((d, i) => {
-    const id = hotbar[i];
+    const s = invSlots[i];
+    const id = s ? s.id : null;
     drawItemIcon(d.querySelector('canvas'), id);
     d.classList.toggle('sel', i === sel);
-    d.classList.toggle('empty', id == null || itemCount(id) <= 0);
-    d.querySelector('.count').textContent = id != null ? (itemCount(id) || '') : '';
-    d.title = id != null ? (BLOCKS[id].name + ' ×' + itemCount(id)) : '';
+    d.classList.toggle('empty', id == null || s.count <= 0);
+    d.querySelector('.count').textContent = id != null ? (s.count || '') : '';
+    d.title = id != null ? (BLOCKS[id].name + ' ×' + s.count) : '';
   });
 }
 
@@ -417,23 +417,23 @@ export function hideDeath() {
 }
 
 /* ================================================================
-   背包界面（三段式：顶部合成 / 中部库存+盔甲 / 底部快捷栏）
+   背包界面（原版布局：左配方书 + 右合成/小人/库存 + 快捷栏同一套库存）
 ================================================================ */
 let inventoryOpen = false;
-let selectedInvItem = null;
+let selectedSlot = null;   // 选中的库存格（invSlots 全局索引 0-35）
 
 export function isInventoryOpen() { return inventoryOpen; }
 
 export function openInventory() {
   inventoryOpen = true;
-  selectedInvItem = null;
+  selectedSlot = null;
   $('inventoryUI').style.display = 'flex';
   renderInventory();
   if (document.exitPointerLock) document.exitPointerLock();
 }
 export function closeInventory() {
   inventoryOpen = false;
-  selectedInvItem = null;
+  selectedSlot = null;
   // 合成格里的材料全部退回背包
   for (let i = 0; i < craftSlots.length; i++) {
     if (craftSlots[i] != null) { addItem(craftSlots[i], 1); craftSlots[i] = null; }
@@ -464,9 +464,10 @@ function renderArmor() {
       d.title = ARMOR_SLOT_HINT[slot] + '槽（选中盔甲后点击穿戴）';
     }
     d.addEventListener('click', () => {
-      if (selectedInvItem != null && ARMOR[selectedInvItem] && ARMOR[selectedInvItem].slot === slot) {
-        wearArmor(selectedInvItem);
-        selectedInvItem = null;
+      if (selectedSlot != null && invSlots[selectedSlot] != null &&
+          ARMOR[invSlots[selectedSlot].id] && ARMOR[invSlots[selectedSlot].id].slot === slot) {
+        wearArmorAt(selectedSlot);
+        selectedSlot = null;
       } else if (armorSlots[slot] != null) {
         takeOffArmor(slot);
       }
@@ -515,28 +516,80 @@ function renderPlayerModel() {
   if (head) { px(4, 0, 8, 4, head); px(4, 1, 1, 3, head); px(11, 1, 1, 3, head); }
 }
 
+// —— 通用：渲染一个库存格（i 为 invSlots 全局索引）——
+function renderInvSlot(d, i) {
+  const s = invSlots[i];
+  d.className = 'is-slot' + (s ? '' : ' empty') + (i === selectedSlot ? ' sel' : '') + (i < 9 ? ' hb' : '');
+  d.innerHTML = '';
+  if (s) {
+    const cv = makeSlotCv(40);
+    drawItemIcon(cv, s.id);
+    d.appendChild(cv);
+    const cnt = document.createElement('span');
+    cnt.className = 'count'; cnt.textContent = s.count;
+    d.appendChild(cnt);
+    d.title = BLOCKS[s.id].name + ' ×' + s.count;
+  }
+}
+// 点击库存格：选中 / 交换整格
+function onInvSlotClick(i) {
+  if (selectedSlot == null) {
+    if (invSlots[i] != null) selectedSlot = i;
+    if (i < 9) setSel(i);
+  } else if (selectedSlot === i) {
+    selectedSlot = null;
+  } else {
+    moveSlot(selectedSlot, i);
+    selectedSlot = null;
+    if (i < 9) setSel(i);
+  }
+}
+// 拖放目标处理（data 来自 dragstart 的 JSON：{i:库存格} 或 {c:合成格}）
+function onInvSlotDrop(data, i) {
+  if (data == null) return;
+  if (data.c != null) {
+    const cid = data.c < 4 ? craftSlots[data.c] : tableSlots[data.c];
+    if (cid == null) return;
+    addItem(cid, 1);
+    if (data.c < 4) craftSlots[data.c] = null; else tableSlots[data.c] = null;
+    craftEvents.dispatchEvent(new CustomEvent('change'));
+    return;
+  }
+  if (data.i != null) moveSlot(data.i, i);
+}
+// 给格子绑定 HTML5 拖放
+function slotDnd(d, getData, onDrop) {
+  d.draggable = true;
+  d.addEventListener('dragstart', e => {
+    const data = getData();
+    if (!data) { e.preventDefault(); return; }
+    e.dataTransfer.setData('text/plain', JSON.stringify(data));
+    e.dataTransfer.effectAllowed = 'move';
+  });
+  d.addEventListener('dragover', e => {
+    if (!e.dataTransfer.types.includes('text/plain')) return;
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+    d.classList.add('drag-over');
+  });
+  d.addEventListener('dragleave', () => d.classList.remove('drag-over'));
+  d.addEventListener('drop', e => {
+    e.preventDefault();
+    d.classList.remove('drag-over');
+    let data = null;
+    try { data = JSON.parse(e.dataTransfer.getData('text/plain') || 'null'); } catch (err) {}
+    onDrop(data, e);
+  });
+}
+
 function renderInventoryGrid() {
   const grid = $('invGrid');
   grid.innerHTML = '';
-  for (let i = 0; i < invSlots.length; i++) {
-    const s = invSlots[i];
+  for (let i = 9; i < 36; i++) {
     const d = document.createElement('div');
-    d.className = 'is-slot' + (s ? '' : ' empty') + (s && selectedInvItem === s.id ? ' sel' : '');
-    if (s) {
-      const cv = makeSlotCv(40);
-      drawItemIcon(cv, s.id);
-      d.appendChild(cv);
-      const cnt = document.createElement('span');
-      cnt.className = 'count'; cnt.textContent = s.count;
-      d.appendChild(cnt);
-      d.title = BLOCKS[s.id].name;
-    }
-    d.addEventListener('click', () => {
-      if (s) selectedInvItem = (selectedInvItem === s.id ? null : s.id);
-      else selectedInvItem = null;
-      renderInventoryGrid();
-      renderArmor();
-    });
+    renderInvSlot(d, i);
+    d.addEventListener('click', () => { onInvSlotClick(i); renderInventory(); });
+    slotDnd(d, () => invSlots[i] ? { i } : null, data => { onInvSlotDrop(data, i); renderInventory(); });
     grid.appendChild(d);
   }
 }
@@ -546,44 +599,19 @@ function renderInventoryHotbar() {
   bar.innerHTML = '';
   for (let i = 0; i < 9; i++) {
     const d = document.createElement('div');
-    d.className = 'is-slot' + (i === sel ? ' sel' : '');
-    const cv = makeSlotCv(40);
-    drawItemIcon(cv, hotbar[i]);
-    d.appendChild(cv);
-    if (hotbar[i] != null) {
-      const cnt = document.createElement('span');
-      cnt.className = 'count'; cnt.textContent = itemCount(hotbar[i]);
-      d.appendChild(cnt);
-      d.title = BLOCKS[hotbar[i]].name;
-    }
-    d.addEventListener('click', () => {
-      if (selectedInvItem != null) {
-        const old = hotbar[i];
-        if (old === selectedInvItem) {
-          selectedInvItem = null;
-        } else {
-          if (old != null) addItem(old, 1);
-          setHotbarSlot(i, selectedInvItem);
-          removeItem(selectedInvItem, 1);
-          selectedInvItem = null;
-        }
-      } else if (hotbar[i] != null) {
-        addItem(hotbar[i], 1);
-        setHotbarSlot(i, null);
-      } else {
-        setSel(i);
-      }
-      renderInventory();
-    });
+    renderInvSlot(d, i);
+    d.addEventListener('click', () => { onInvSlotClick(i); renderInventory(); });
+    slotDnd(d, () => invSlots[i] ? { i } : null, data => { onInvSlotDrop(data, i); renderInventory(); });
     bar.appendChild(d);
   }
 }
 
-function renderCraftArea() {
-  for (let i = 0; i < 4; i++) {
-    const slot = $('craftSlot' + i);
+// 合成格通用：渲染 + 点击取回/放入 + 拖放
+function renderCraftSlots(slots, W, idPrefix) {
+  for (let i = 0; i < W * W; i++) {
+    const slot = $(idPrefix + i);
     slot.innerHTML = '';
-    const id = craftSlots[i];
+    const id = slots[i];
     if (id != null) {
       const cv = makeSlotCv(40);
       drawItemIcon(cv, id);
@@ -594,7 +622,26 @@ function renderCraftArea() {
       slot.classList.add('empty');
       slot.title = '';
     }
+    slotDnd(slot,
+      () => slots[i] != null ? { c: i } : null,
+      data => {
+        if (data == null) return;
+        if (data.c != null && data.c !== i && slots[i] == null && slots[data.c] != null) {
+          slots[i] = slots[data.c]; slots[data.c] = null;
+        } else if (data.i != null && slots[i] == null && invSlots[data.i] != null) {
+          const id2 = invSlots[data.i].id;
+          removeItemAt(data.i, 1);
+          slots[i] = id2;
+        }
+        craftEvents.dispatchEvent(new CustomEvent('change'));
+        if (inventoryOpen) renderInventory();
+        if (tableOpen) renderTable();
+      });
   }
+}
+
+function renderCraftArea() {
+  renderCraftSlots(craftSlots, 2, 'craftSlot');
   const m = matchCraftRecipe();
   const res = $('craftResult');
   res.innerHTML = '';
@@ -611,7 +658,7 @@ function renderCraftArea() {
   } else {
     res.classList.add('empty');
   }
-  renderRecipeBook(RECIPES, $('recipeList'), craftSlots, 2);
+  renderRecipeBook($('recipeList'), [...RECIPES, ...TABLE_RECIPES]);
 }
 
 // 配方所需材料统计（从 pattern）
@@ -620,29 +667,24 @@ function recipeNeeds(r) {
   for (const m of r.pattern) if (m != null) counts[m] = (counts[m] || 0) + 1;
   return counts;
 }
-// 玩家当前可用材料数（背包 + 快捷栏手持）
-function availCount(id) {
-  let c = itemCount(id);
-  for (const h of hotbar) if (h === id) c++;
-  return c;
-}
+// 玩家当前可用材料数（同一套库存，36 格都算）
+function availCount(id) { return itemCount(id); }
 function canCraftRecipe(r) {
   const need = recipeNeeds(r);
   return Object.entries(need).every(([id, n]) => availCount(+id) >= n);
 }
-// 从背包、再从快捷栏取 n 个材料
+// 从库存逐格取 n 个材料
 function takeMaterial(id, n) {
-  const inInv = itemCount(id);
-  const fromInv = Math.min(inInv, n);
-  if (fromInv > 0) removeItem(id, fromInv);
-  let remain = n - fromInv;
-  while (remain > 0) {
-    const i = hotbar.indexOf(id);
-    if (i < 0) return false;
-    setHotbarSlot(i, null);
-    remain--;
+  let remain = n;
+  for (let i = 0; i < invSlots.length && remain > 0; i++) {
+    const s = invSlots[i];
+    if (s && s.id === id) {
+      const take = Math.min(s.count, remain);
+      removeItemAt(i, take);
+      remain -= take;
+    }
   }
-  return true;
+  return remain <= 0;
 }
 // 点击配方书：退回合成格现有材料，自动把所需材料摆入
 function autoPlaceRecipe(r, slots, W) {
@@ -655,8 +697,8 @@ function autoPlaceRecipe(r, slots, W) {
   for (let i = 0; i < W * W; i++) slots[i] = r.pattern[i] != null ? r.pattern[i] : null;
   return true;
 }
-// 配方书：成品图标横滑，能合成绿勾可点击，不能合成灰显红叉
-function renderRecipeBook(recipes, list, slots, W) {
+// 配方书：成品图标，能合成绿勾可点击，不能合成灰显红叉；2×2 摆背包合成格，3×3 自动开工作台
+function renderRecipeBook(list, recipes) {
   list.innerHTML = '';
   recipes.forEach(r => {
     const can = canCraftRecipe(r);
@@ -673,7 +715,15 @@ function renderRecipeBook(recipes, list, slots, W) {
       .map(([id, n]) => blockName(+id) + '×' + n).join(' ');
     d.title = r.name + ' ×' + r.count + '（需要：' + mats + '）' + (can ? '　点击自动摆放' : '　材料不足');
     if (can) d.addEventListener('click', () => {
+      const W = r.pattern.length === 4 ? 2 : 3;
+      const slots = W === 2 ? craftSlots : tableSlots;
       if (!autoPlaceRecipe(r, slots, W)) return;
+      if (W === 3 && !tableOpen) {
+        // 背包里点工作台配方：自动打开工作台
+        closeInventory();
+        openTable();
+        return;
+      }
       craftEvents.dispatchEvent(new CustomEvent('change'));
       if (inventoryOpen) renderInventory();
       if (tableOpen) renderTable();
@@ -691,21 +741,7 @@ export function renderInventory() {
 }
 
 function renderTable() {
-  for (let i = 0; i < 9; i++) {
-    const slot = $('tableSlot' + i);
-    slot.innerHTML = '';
-    const id = tableSlots[i];
-    if (id != null) {
-      const cv = makeSlotCv(40);
-      drawItemIcon(cv, id);
-      slot.appendChild(cv);
-      slot.title = BLOCKS[id].name;
-      slot.classList.remove('empty');
-    } else {
-      slot.classList.add('empty');
-      slot.title = '';
-    }
-  }
+  renderCraftSlots(tableSlots, 3, 'tableSlot');
   const m = matchTableRecipe();
   const res = $('tableResult');
   res.innerHTML = '';
@@ -724,30 +760,17 @@ function renderTable() {
   }
   renderTableInvGrid();
   renderTableHotbar();
-  renderRecipeBook(TABLE_RECIPES, $('tableRecipeList'), tableSlots, 3);
+  renderRecipeBook($('tableRecipeList'), TABLE_RECIPES);
 }
 
 function renderTableInvGrid() {
   const grid = $('tableInvGrid');
   grid.innerHTML = '';
-  for (let i = 0; i < invSlots.length; i++) {
-    const s = invSlots[i];
+  for (let i = 9; i < 36; i++) {
     const d = document.createElement('div');
-    d.className = 'is-slot' + (s ? '' : ' empty') + (s && selectedInvItem === s.id ? ' sel' : '');
-    if (s) {
-      const cv = makeSlotCv(40);
-      drawItemIcon(cv, s.id);
-      d.appendChild(cv);
-      const cnt = document.createElement('span');
-      cnt.className = 'count'; cnt.textContent = s.count;
-      d.appendChild(cnt);
-      d.title = BLOCKS[s.id].name;
-    }
-    d.addEventListener('click', () => {
-      if (s) selectedInvItem = (selectedInvItem === s.id ? null : s.id);
-      else selectedInvItem = null;
-      renderTableInvGrid();
-    });
+    renderInvSlot(d, i);
+    d.addEventListener('click', () => { onInvSlotClick(i); renderTable(); });
+    slotDnd(d, () => invSlots[i] ? { i } : null, data => { onInvSlotDrop(data, i); renderTable(); });
     grid.appendChild(d);
   }
 }
@@ -757,35 +780,9 @@ function renderTableHotbar() {
   bar.innerHTML = '';
   for (let i = 0; i < 9; i++) {
     const d = document.createElement('div');
-    d.className = 'is-slot' + (i === sel ? ' sel' : '');
-    const cv = makeSlotCv(40);
-    drawItemIcon(cv, hotbar[i]);
-    d.appendChild(cv);
-    if (hotbar[i] != null) {
-      const cnt = document.createElement('span');
-      cnt.className = 'count'; cnt.textContent = itemCount(hotbar[i]);
-      d.appendChild(cnt);
-      d.title = BLOCKS[hotbar[i]].name;
-    }
-    d.addEventListener('click', () => {
-      if (selectedInvItem != null) {
-        const old = hotbar[i];
-        if (old === selectedInvItem) {
-          selectedInvItem = null;
-        } else {
-          if (old != null) addItem(old, 1);
-          setHotbarSlot(i, selectedInvItem);
-          removeItem(selectedInvItem, 1);
-          selectedInvItem = null;
-        }
-      } else if (hotbar[i] != null) {
-        addItem(hotbar[i], 1);
-        setHotbarSlot(i, null);
-      } else {
-        setSel(i);
-      }
-      renderTable();
-    });
+    renderInvSlot(d, i);
+    d.addEventListener('click', () => { onInvSlotClick(i); renderTable(); });
+    slotDnd(d, () => invSlots[i] ? { i } : null, data => { onInvSlotDrop(data, i); renderTable(); });
     bar.appendChild(d);
   }
 }
@@ -814,10 +811,11 @@ export function bindInventoryUI() {
       if (craftSlots[i] != null) {
         addItem(craftSlots[i], 1);
         craftSlots[i] = null;
-      } else if (selectedInvItem != null && itemCount(selectedInvItem) > 0) {
-        craftSlots[i] = selectedInvItem;
-        removeItem(selectedInvItem, 1);
-        selectedInvItem = null;
+      } else if (selectedSlot != null && invSlots[selectedSlot] != null) {
+        const id = invSlots[selectedSlot].id;
+        removeItemAt(selectedSlot, 1);
+        craftSlots[i] = id;
+        selectedSlot = null;
       }
       craftEvents.dispatchEvent(new CustomEvent('change'));
       renderInventory();
@@ -841,10 +839,11 @@ export function bindTableUI() {
       if (tableSlots[i] != null) {
         addItem(tableSlots[i], 1);
         tableSlots[i] = null;
-      } else if (selectedInvItem != null && itemCount(selectedInvItem) > 0) {
-        tableSlots[i] = selectedInvItem;
-        removeItem(selectedInvItem, 1);
-        selectedInvItem = null;
+      } else if (selectedSlot != null && invSlots[selectedSlot] != null) {
+        const id = invSlots[selectedSlot].id;
+        removeItemAt(selectedSlot, 1);
+        tableSlots[i] = id;
+        selectedSlot = null;
       }
       craftEvents.dispatchEvent(new CustomEvent('change'));
       renderTable();

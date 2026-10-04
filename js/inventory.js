@@ -1,13 +1,14 @@
 /* ================================================================
-   背包（27 格，3×9 原版布局）/ 快捷栏 / 选中格 / 盔甲槽
-   初始背包为空：物品通过挖掘收集，可放入 27 格背包 + 9 格快捷栏
-   旧存档 16 格自动兼容（save.js 按长度迁移，后 11 格为空）
+   库存（36 格，原版模型）：快捷栏与背包是同一套格子
+   invSlots[0..8]   = 快捷栏（玩家手持）
+   invSlots[9..35]  = 背包
+   物品放进快捷栏只是改变存放位置，不额外扣数量
+   旧 16/27 格存档在 save.js 自动迁移
 ================================================================ */
 import { ARMOR, ARMOR_SLOTS } from './constants.js';
-export const invSlots = new Array(27).fill(null);   // 每格 {id, count} | null
+export const invSlots = new Array(36).fill(null);   // 每格 {id, count} | null
 export const inv = {};                              // id -> 总数（派生视图，供存档/钩子使用）
-export const hotbar = new Array(9).fill(null);      // 快捷栏 9 格（物品 id 或 null）
-export let sel = 0;                                 // 当前选中的快捷栏格
+export let sel = 0;                                 // 当前选中的快捷栏格（0-8）
 export const armorSlots = { head: null, chest: null, legs: null, feet: null }; // 盔甲槽
 
 export const inventoryEvents = new EventTarget();
@@ -18,6 +19,7 @@ function syncInv() {
 }
 
 export function setSel(i) {
+  if (i < 0 || i > 8) return;
   sel = i;
   inventoryEvents.dispatchEvent(new CustomEvent('selchange'));
 }
@@ -27,58 +29,82 @@ export function addItem(id, n = 1) {
   if (slot) {
     slot.count += n;
   } else {
-    const i = invSlots.indexOf(null);                  // 其次放入空格
+    const i = invSlots.indexOf(null);                  // 其次放入任意空格
     if (i >= 0) invSlots[i] = { id, count: n };
-    else invSlots[0].count += n;                       // 已满：并入第一格兜底
+    else invSlots[0].count += n;                       // 已满：并入快捷栏首格兜底
   }
-  if (!hotbar.includes(id)) {                          // 快捷栏空位自动放入（便于直接使用）
-    const i = hotbar.indexOf(null);
-    if (i >= 0) hotbar[i] = id;
-  }
+  autoSlot(id);                                        // 快捷栏空位自动放入（同库存移动，不重复计数）
   syncInv();
   inventoryEvents.dispatchEvent(new CustomEvent('invchange'));
+}
+// 从指定格子移除 n 个
+export function removeItemAt(i, n = 1) {
+  const s = invSlots[i];
+  if (!s) return false;
+  s.count -= n;
+  if (s.count <= 0) invSlots[i] = null;
+  syncInv();
+  inventoryEvents.dispatchEvent(new CustomEvent('invchange'));
+  return true;
 }
 export function removeItem(id, n = 1) {
   for (let i = 0; i < invSlots.length; i++) {
     const s = invSlots[i];
-    if (s && s.id === id) {
-      s.count -= n;
-      if (s.count <= 0) invSlots[i] = null;
-      syncInv();
-      inventoryEvents.dispatchEvent(new CustomEvent('invchange'));
-      return true;
-    }
+    if (s && s.id === id) return removeItemAt(i, n);
   }
   return false;
+}
+// 交换两个格子的整叠物品
+export function moveSlot(from, to) {
+  if (from === to || from < 0 || to < 0 || from >= invSlots.length || to >= invSlots.length) return;
+  const tmp = invSlots[from];
+  invSlots[from] = invSlots[to];
+  invSlots[to] = tmp;
+  syncInv();
+  inventoryEvents.dispatchEvent(new CustomEvent('invchange'));
 }
 export function itemCount(id) {
   let c = 0;
   for (const s of invSlots) if (s && s.id === id) c += s.count;
   return c;
 }
-export function setHotbarSlot(i, id) {
-  hotbar[i] = id == null ? null : id;
-  inventoryEvents.dispatchEvent(new CustomEvent('invchange'));
-}
-export function selectedHotbarId() { return hotbar[sel]; }
-// 物品自动放入快捷栏空位（仅当该物品还没在快捷栏中）
+// 快捷栏格物品 id（null 为空）
+export function hotbarId(i) { return invSlots[i] ? invSlots[i].id : null; }
+export function selectedHotbarId() { return invSlots[sel] ? invSlots[sel].id : null; }
+// 新物品自动放入快捷栏空位（从该物品所在格移动 1 个过去，总数量不变）
 export function autoSlot(id) {
-  if (id == null || hotbar.includes(id)) return;
-  const i = hotbar.indexOf(null);
-  if (i >= 0) setHotbarSlot(i, id);
+  if (id == null) return;
+  for (let i = 0; i < 9; i++) if (invSlots[i] && invSlots[i].id === id) return;
+  const empty = invSlots.findIndex((s, i) => i < 9 && !s);
+  if (empty < 0) return;
+  const src = invSlots.findIndex((s, i) => i >= 9 && s && s.id === id);
+  if (src < 0) return;
+  invSlots[src].count -= 1;
+  if (invSlots[src].count <= 0) invSlots[src] = null;
+  invSlots[empty] = { id, count: 1 };
+  syncInv();
 }
 
 /* ================================================================
    盔甲：穿戴 / 脱下 / 总防御
 ================================================================ */
-export function wearArmor(id) {
-  const a = ARMOR[id];
-  if (!a || itemCount(id) <= 0) return false;
+// 从指定格子穿戴盔甲（精确扣减）
+export function wearArmorAt(idx) {
+  const s = invSlots[idx];
+  if (!s) return false;
+  const a = ARMOR[s.id];
+  if (!a || s.count <= 0) return false;
   if (armorSlots[a.slot] != null) addItem(armorSlots[a.slot], 1);   // 槽内有旧甲先脱下
-  removeItem(id, 1);
-  armorSlots[a.slot] = id;
+  removeItemAt(idx, 1);
+  armorSlots[a.slot] = s.id;
   inventoryEvents.dispatchEvent(new CustomEvent('armorchange'));
   return true;
+}
+export function wearArmor(id) {
+  if (id == null) return false;
+  const i = invSlots.findIndex(s => s && s.id === id);
+  if (i < 0) return false;
+  return wearArmorAt(i);
 }
 export function takeOffArmor(slot) {
   const id = armorSlots[slot];

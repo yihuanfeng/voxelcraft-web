@@ -60,35 +60,39 @@
   <button class="btn" id="respawnBtn">🔄  重新出生</button>
 </div>
 
-<!-- 背包界面（原版布局：合成+小人 / 配方书 / 背包与快捷栏连成一条） -->
+<!-- 背包界面（原版布局：左配方书 + 右合成/小人 + 库存与快捷栏同一套格子） -->
 <div id="inventoryUI">
   <div class="inv-panel mc-panel">
     <div class="inv-head">
       <span class="inv-title">🎒</span>
       <button class="inv-close" id="closeInvBtn" title="关闭 (E)">✕</button>
     </div>
-    <div class="mc-top">
-      <div class="mc-craft">
-        <div class="craft-2x2">
-          <div class="is-slot empty" id="craftSlot0"></div>
-          <div class="is-slot empty" id="craftSlot1"></div>
-          <div class="is-slot empty" id="craftSlot2"></div>
-          <div class="is-slot empty" id="craftSlot3"></div>
+    <div class="mc-body">
+      <div class="mc-left">
+        <div class="recipe-book" id="recipeList"></div>
+      </div>
+      <div class="mc-right">
+        <div class="mc-top">
+          <div class="mc-craft">
+            <div class="craft-2x2">
+              <div class="is-slot empty" id="craftSlot0"></div>
+              <div class="is-slot empty" id="craftSlot1"></div>
+              <div class="is-slot empty" id="craftSlot2"></div>
+              <div class="is-slot empty" id="craftSlot3"></div>
+            </div>
+            <div class="craft-arrow">→</div>
+            <div id="craftResult" class="empty" title="合成结果（点击取走）"></div>
+          </div>
+          <div class="mc-player">
+            <canvas id="playerModel" class="player-model" width="96" height="128" title="角色装备预览"></canvas>
+            <div class="armor-col" id="armorGrid"></div>
+          </div>
         </div>
-        <div class="craft-arrow">→</div>
-        <div id="craftResult" class="empty" title="合成结果（点击取走）"></div>
+        <div class="mc-bag">
+          <div class="inv-grid inv-grid-9" id="invGrid"></div>
+          <div class="inv-grid inv-hotbar" id="invHotbar"></div>
+        </div>
       </div>
-      <div class="mc-player">
-        <canvas id="playerModel" class="player-model" width="96" height="128" title="角色装备预览"></canvas>
-        <div class="armor-col" id="armorGrid"></div>
-      </div>
-    </div>
-    <div class="mc-recipebook">
-      <div class="recipe-strip" id="recipeList"></div>
-    </div>
-    <div class="mc-bag">
-      <div class="inv-grid inv-grid-9" id="invGrid"></div>
-      <div class="inv-grid inv-hotbar" id="invHotbar"></div>
     </div>
   </div>
 </div>
@@ -100,29 +104,33 @@
       <span class="inv-title">🛠</span>
       <button class="inv-close" id="closeTableBtn" title="关闭 (Esc)">✕</button>
     </div>
-    <div class="mc-top table-top">
-      <div class="mc-craft">
-        <div class="craft-3x3">
-          <div class="is-slot empty" id="tableSlot0"></div>
-          <div class="is-slot empty" id="tableSlot1"></div>
-          <div class="is-slot empty" id="tableSlot2"></div>
-          <div class="is-slot empty" id="tableSlot3"></div>
-          <div class="is-slot empty" id="tableSlot4"></div>
-          <div class="is-slot empty" id="tableSlot5"></div>
-          <div class="is-slot empty" id="tableSlot6"></div>
-          <div class="is-slot empty" id="tableSlot7"></div>
-          <div class="is-slot empty" id="tableSlot8"></div>
-        </div>
-        <div class="craft-arrow">→</div>
-        <div id="tableResult" class="empty" title="合成结果（点击取走）"></div>
+    <div class="mc-body">
+      <div class="mc-left">
+        <div class="recipe-book" id="tableRecipeList"></div>
       </div>
-    </div>
-    <div class="mc-recipebook">
-      <div class="recipe-strip" id="tableRecipeList"></div>
-    </div>
-    <div class="mc-bag">
-      <div class="inv-grid inv-grid-9" id="tableInvGrid"></div>
-      <div class="inv-grid inv-hotbar" id="tableHotbar"></div>
+      <div class="mc-right">
+        <div class="mc-top table-top">
+          <div class="mc-craft">
+            <div class="craft-3x3">
+              <div class="is-slot empty" id="tableSlot0"></div>
+              <div class="is-slot empty" id="tableSlot1"></div>
+              <div class="is-slot empty" id="tableSlot2"></div>
+              <div class="is-slot empty" id="tableSlot3"></div>
+              <div class="is-slot empty" id="tableSlot4"></div>
+              <div class="is-slot empty" id="tableSlot5"></div>
+              <div class="is-slot empty" id="tableSlot6"></div>
+              <div class="is-slot empty" id="tableSlot7"></div>
+              <div class="is-slot empty" id="tableSlot8"></div>
+            </div>
+            <div class="craft-arrow">→</div>
+            <div id="tableResult" class="empty" title="合成结果（点击取走）"></div>
+          </div>
+        </div>
+        <div class="mc-bag">
+          <div class="inv-grid inv-grid-9" id="tableInvGrid"></div>
+          <div class="inv-grid inv-hotbar" id="tableHotbar"></div>
+        </div>
+      </div>
     </div>
   </div>
 </div>

@@ -1,6 +1,6 @@
 import { setBlock, inWorld, pendingDiffs, saveDirty, setDim, dim } from './world.js';
 import { player } from './player.js';
-import { inv, invSlots, hotbar, sel, setSel, armorSlots } from './inventory.js';
+import { inv, invSlots, sel, setSel, armorSlots } from './inventory.js';
 import { worldTime, setWorldTime } from './renderer.js';
 
 /* ================================================================
@@ -34,20 +34,51 @@ export function applyPlayerSave() {
     player.pos.set(p.x, p.y, p.z);
     player.yaw = p.yaw; player.pitch = p.pitch;
     player.hp = p.hp; player.fly = !!p.fly;
-    // 背包：新格式 invSlots（27 格）；旧 16 格存档自动补空；更旧格式 inv（id->count 对象）自动迁移
+    // 库存：新格式 invSlots（36 格：0-8 快捷栏 + 9-35 背包）
+    // 旧 16/27 格存档自动迁移：背包放 9-35，hotbar 引用物品从背包扣 1 放入快捷栏
+    // 更旧格式 inv（id->count 对象）自动迁移
     for (let i = 0; i < invSlots.length; i++) invSlots[i] = null;
-    if (Array.isArray(p.invSlots)) {
-      for (let i = 0; i < Math.min(p.invSlots.length, invSlots.length); i++) {
+    if (Array.isArray(p.invSlots) && p.invSlots.length >= 36) {
+      for (let i = 0; i < 36; i++) {
         const e = p.invSlots[i];
         invSlots[i] = (e && typeof e.id === 'number' && e.count > 0) ? { id: e.id, count: e.count } : null;
       }
+    } else if (Array.isArray(p.invSlots)) {
+      const old = p.invSlots;
+      for (let i = 0; i < Math.min(old.length, 27); i++) {
+        const e = old[i];
+        if (e && typeof e.id === 'number' && e.count > 0) invSlots[9 + i] = { id: e.id, count: e.count };
+      }
+      if (Array.isArray(p.hotbar)) {
+        for (let i = 0; i < 9; i++) {
+          const hid = p.hotbar[i];
+          if (hid == null) continue;
+          const bi = invSlots.findIndex((s, j) => j >= 9 && s && s.id === hid);
+          if (bi >= 0) {
+            invSlots[bi].count -= 1;
+            if (invSlots[bi].count <= 0) invSlots[bi] = null;
+          }
+          if (invSlots[i] == null) invSlots[i] = { id: hid, count: 1 };
+        }
+      }
     } else if (p.inv) {
       const ids = Object.keys(p.inv).map(Number).filter(id => (p.inv[id] || 0) > 0).sort((a, b) => a - b);
-      for (let i = 0; i < Math.min(ids.length, invSlots.length); i++) {
-        invSlots[i] = { id: ids[i], count: p.inv[ids[i]] };
+      for (let i = 0; i < Math.min(ids.length, 27); i++) {
+        invSlots[9 + i] = { id: ids[i], count: p.inv[ids[i]] };
+      }
+      if (Array.isArray(p.hotbar)) {
+        for (let i = 0; i < 9; i++) {
+          const hid = p.hotbar[i];
+          if (hid == null) continue;
+          const bi = invSlots.findIndex((s, j) => j >= 9 && s && s.id === hid);
+          if (bi >= 0) {
+            invSlots[bi].count -= 1;
+            if (invSlots[bi].count <= 0) invSlots[bi] = null;
+          }
+          if (invSlots[i] == null) invSlots[i] = { id: hid, count: 1 };
+        }
       }
     }
-    if (Array.isArray(p.hotbar)) for (let i = 0; i < 9; i++) hotbar[i] = p.hotbar[i] ?? null;
     if (typeof p.sel === 'number') setSel(Math.min(8, Math.max(0, p.sel)));
     // 盔甲槽（旧存档无此字段时保持空）
     if (p.armor && typeof p.armor === 'object') {
@@ -76,7 +107,7 @@ export function flushSave() {
       hp: player.hp, fly: player.fly,
       invSlots: invSlots.map(s => s ? { id: s.id, count: s.count } : null),
       inv: { ...inv },
-      hotbar: [...hotbar],
+      hotbar: invSlots.slice(0, 9).map(s => s ? s.id : null),
       sel,
       dim,
       armor: { ...armorSlots },

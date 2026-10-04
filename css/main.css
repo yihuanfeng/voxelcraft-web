@@ -170,7 +170,7 @@ html, body {
 }
 #tableUI { z-index: 9; }
 .mc-panel {
-  width: 488px; max-width: 96vw; max-height: 94vh; overflow: auto;
+  width: 640px; max-width: 96vw; max-height: 94vh; overflow: auto;
   background: linear-gradient(180deg, rgba(31, 37, 51, 0.98), rgba(20, 25, 37, 0.98));
   border: 2px solid rgba(255, 255, 255, 0.16); border-radius: 10px;
   padding: 14px 16px 16px; box-shadow: 0 20px 60px rgba(0, 0, 0, 0.6);
@@ -183,8 +183,16 @@ html, body {
 }
 .inv-close:hover { background: rgba(255, 255, 255, 0.25); }
 
+/* 主体两栏：左配方书 + 右内容 */
+.mc-body { display: flex; gap: 10px; align-items: stretch; }
+.mc-left {
+  width: 140px; flex: none; overflow: hidden;
+  background: rgba(0, 0, 0, 0.25); border-radius: 8px; padding: 7px;
+}
+.mc-right { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 10px; }
+
 /* 顶行：合成区 + 角色小人 */
-.mc-top { display: flex; justify-content: space-between; align-items: flex-start; gap: 10px; margin-bottom: 10px; }
+.mc-top { display: flex; justify-content: space-between; align-items: flex-start; gap: 10px; }
 .table-top { justify-content: center; }
 .mc-craft {
   display: flex; align-items: center; gap: 10px;
@@ -222,18 +230,13 @@ html, body {
 .armor-slot { position: relative; }
 .armor-slot .armor-label { font-size: 10px; color: #7d8aa6; text-shadow: 0 1px 2px #000; }
 
-/* 配方书：3 行图标，横向滑动，勾 / 叉角标 */
-.mc-recipebook {
-  background: rgba(0, 0, 0, 0.25); border-radius: 8px; padding: 7px;
-  margin-bottom: 10px; overflow: hidden;
+/* 配方书（左栏）：3 列图标，纵向滚动，勾 / 叉角标 */
+.recipe-book {
+  display: grid; grid-template-columns: repeat(3, 40px); gap: 4px;
+  max-height: 460px; overflow-y: auto; overflow-x: hidden; align-content: start;
 }
-.recipe-strip {
-  display: grid; grid-template-rows: repeat(3, 40px);
-  grid-auto-flow: column; grid-auto-columns: 40px;
-  gap: 4px; overflow-x: auto; overflow-y: hidden; padding-bottom: 5px;
-}
-.recipe-strip::-webkit-scrollbar { height: 8px; }
-.recipe-strip::-webkit-scrollbar-thumb { background: rgba(255,255,255,.18); border-radius: 4px; }
+.recipe-book::-webkit-scrollbar { width: 8px; }
+.recipe-book::-webkit-scrollbar-thumb { background: rgba(255,255,255,.18); border-radius: 4px; }
 .recipe-cell {
   position: relative; width: 40px; height: 40px; border-radius: 5px;
   display: flex; align-items: center; justify-content: center;
@@ -258,6 +261,9 @@ html, body {
 .inv-grid-9 { display: grid; grid-template-columns: repeat(9, 1fr); gap: 4px; }
 .inv-hotbar { display: grid; grid-template-columns: repeat(9, 1fr); gap: 4px; }
 .inv-hotbar .is-slot { border-color: rgba(255, 255, 255, 0.3); }
+
+/* 拖放高亮 */
+.is-slot.drag-over { border-color: #ffe27a; background: rgba(255, 226, 122, 0.35); }
 
 /* 格子通用 */
 .is-slot {

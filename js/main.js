@@ -21,7 +21,7 @@ import {
 } from './player.js';
 import { updateSpawner, zombies, zombieBoxes, setPeaceful, Zombie, updateBoneProjectiles } from './zombies.js';
 import { LAVA, BEDROCK } from './constants.js';
-import { inv, invSlots, hotbar, sel, setSel, addItem } from './inventory.js';
+import { inv, invSlots, sel, setSel, addItem, selectedHotbarId } from './inventory.js';
 import { sfx, initAudio } from './audio.js';
 import {
   buildHotbarHud, renderHearts, renderDebug,
@@ -219,7 +219,7 @@ function tryAttack() {
     const z = hits[0].object.userData.zombie;
     const dir = camera.getWorldDirection(new THREE.Vector3());
     dir.y = 0; dir.normalize();
-    const dmg = TOOL_DAMAGE[hotbar[sel]] || 1;
+    const dmg = TOOL_DAMAGE[selectedHotbarId()] || 1;
     z.damage(dmg, dir);
     sfx.punch();
     return true;
@@ -329,7 +329,8 @@ animate();
 ================================================================ */
 window.game = {
   THREE, scene, camera, renderer, player, zombies, inv, world,
-  getBlock, setBlock, surfaceY, spawn, hotbar, sel, invSlots,
+  getBlock, setBlock, surfaceY, spawn, sel, invSlots,
+  get hotbar() { return invSlots.slice(0, 9).map(s => s ? s.id : null); },
   droppedItems, pickups, zombieBoxes, villages, villagers,
   forceStart, setPeaceful, openInventory, closeInventory, flushSave,
   openTable, closeTable, isTableOpen, aimBlock, dim: () => dim, switchDimension,

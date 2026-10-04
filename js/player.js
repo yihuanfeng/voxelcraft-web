@@ -5,7 +5,7 @@ import { SIZE, AIR, WATER, BEDROCK, BLOCKS, isPlaceable,
          TOOL_TIER, BLOCK_TIER } from './constants.js';
 import { getBlock, setBlock, surfaceY, moveEntity, markDirty, tryLightPortal } from './world.js';
 import { sfx, initAudio } from './audio.js';
-import { addItem, removeItem, itemCount, sel, hotbar, selectedHotbarId, autoSlot, inventoryEvents, armorDefense } from './inventory.js';
+import { addItem, removeItem, itemCount, sel, selectedHotbarId, autoSlot, inventoryEvents, armorDefense } from './inventory.js';
 import { camera, aimBlock, rebuildAround, burst, spawnDropped } from './renderer.js';
 
 /* ================================================================
