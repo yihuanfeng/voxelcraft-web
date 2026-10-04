@@ -100,7 +100,7 @@ zombies.js → constants / world / player / renderer / audio
 
 ### UI（ui.js）
 
-- 背包/工作台是**两栏原版布局**（`mc-panel > mc-body`）：左栏配方书（`.recipe-book`，3 列纵向滚动，✓可合成/✕材料不足），右栏顶部合成区（2×2/3×3 → 箭头 → 结果格，背包右上有角色小人 `playerModel` + 盔甲竖槽 `armorGrid`），右栏底部背包 3×9（`invGrid`，只渲染 9-35）与快捷栏 1×9（`invHotbar`，只渲染 0-8）在同一 `mc-bag` 容器内紧贴
+- 背包/工作台是**两栏原版布局**（`mc-panel > mc-body`）：左栏分类 tabs（`.recipe-tabs`，竖排：全部/方块/工具/装备/材料，`recipeCategory()` 按 result 的 `ARMOR/TOOL_DAMAGE/PLACEABLE_IDS` 分类，state `invCat/tableCat`）+ 配方书（`.recipe-book`，3 列纵向滚动，✓可合成/✕材料不足，**不可合成也正常显示不灰化**），右栏顶部合成区（2×2/3×3 → 箭头 → 结果格，背包右上有角色小人 `playerModel` + 盔甲竖槽 `armorGrid`），右栏底部背包 3×9（`invGrid`，只渲染 9-35）与快捷栏 1×9（`invHotbar`，只渲染 0-8）在同一 `mc-bag` 容器内紧贴
 - 工作台同构（3×3，无小人/盔甲栏）：`tableRecipeList`、`tableInvGrid`、`tableHotbar`
 - 交互模型：点击库存格选中（`selectedSlot`，invSlots 全局索引）→ 再点另一格 `moveSlot` 整格交换；快捷栏格点击顺带 `setSel`；HTML5 拖放 `slotDnd`（data JSON `{i:库存索引}` 或 `{c:合成格索引}`）：库存↔库存整格交换、合成格→库存退回 `addItem`、库存→合成格 `removeItemAt(src,1)` 放入、合成格间移动；点击配方书可合成项=自动摆放材料；关闭背包/工作台时合成格材料自动退回
 - 角色小人为 2D 像素绘制（`renderPlayerModel`，16×32 逻辑像素），盔甲颜色按 ID 段映射

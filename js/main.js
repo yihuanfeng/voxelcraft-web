@@ -173,6 +173,15 @@ document.addEventListener('pointerlockchange', () => {
 document.addEventListener('pointerlockerror', forceStart);
 
 /* ================================================================
+   禁止浏览器缩放（Ctrl/⌘ + 滚轮、Ctrl/⌘ + ±/0、双击）
+================================================================ */
+addEventListener('wheel', e => { if (e.ctrlKey || e.metaKey) e.preventDefault(); }, { passive: false });
+addEventListener('keydown', e => {
+  if ((e.ctrlKey || e.metaKey) && (e.key === '+' || e.key === '-' || e.key === '=' || e.key === '0')) e.preventDefault();
+});
+addEventListener('dblclick', e => e.preventDefault());
+
+/* ================================================================
    键盘 / 鼠标输入
 ================================================================ */
 addEventListener('keydown', e => {

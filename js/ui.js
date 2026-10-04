@@ -13,7 +13,7 @@ import { BLOCKS, atlas,
          DIAMOND_HELMET, DIAMOND_CHESTPLATE, DIAMOND_LEGGINGS, DIAMOND_BOOTS,
          COPPER_HELMET, COPPER_CHESTPLATE, COPPER_LEGGINGS, COPPER_BOOTS,
          EMERALD, BONE, STRING, GUNPOWDER, ARMOR, ARMOR_SLOTS, recommendTool,
-         BLOCK_TIER, TOOL_TIER } from './constants.js';
+         BLOCK_TIER, TOOL_TIER, TOOL_DAMAGE, PLACEABLE_IDS } from './constants.js';
 import { inv, invSlots, sel, setSel, addItem, removeItem, removeItemAt, moveSlot,
          itemCount, inventoryEvents, armorSlots, wearArmorAt, takeOffArmor, selectedHotbarId } from './inventory.js';
 import { craftSlots, tableSlots, RECIPES, TABLE_RECIPES,
@@ -658,7 +658,8 @@ function renderCraftArea() {
   } else {
     res.classList.add('empty');
   }
-  renderRecipeBook($('recipeList'), [...RECIPES, ...TABLE_RECIPES]);
+  renderRecipeBook($('recipeList'), [...RECIPES, ...TABLE_RECIPES], invCat);
+  renderRecipeTabs($('recipeTabs'), invCat, cat => { invCat = cat; renderInventory(); });
 }
 
 // 配方所需材料统计（从 pattern）
@@ -697,10 +698,41 @@ function autoPlaceRecipe(r, slots, W) {
   for (let i = 0; i < W * W; i++) slots[i] = r.pattern[i] != null ? r.pattern[i] : null;
   return true;
 }
-// 配方书：成品图标，能合成绿勾可点击，不能合成灰显红叉；2×2 摆背包合成格，3×3 自动开工作台
-function renderRecipeBook(list, recipes) {
+// 配方分类（用于配方书左侧 tabs）
+const RECIPE_CATS = [
+  { key: 'all',   label: '全部' },
+  { key: 'block', label: '方块' },
+  { key: 'tool',  label: '工具' },
+  { key: 'armor', label: '装备' },
+  { key: 'mat',   label: '材料' },
+];
+function recipeCategory(r) {
+  const id = r.result;
+  if (ARMOR[id]) return 'armor';
+  if (TOOL_DAMAGE[id] != null) return 'tool';
+  if (PLACEABLE_IDS.has(id)) return 'block';
+  return 'mat';
+}
+// 渲染配方书分类 tabs，点击切换当前分类
+function renderRecipeTabs(container, currentCat, onCat) {
+  container.innerHTML = '';
+  RECIPE_CATS.forEach(c => {
+    const b = document.createElement('button');
+    b.className = 'recipe-tab' + (c.key === currentCat ? ' active' : '');
+    b.textContent = c.label;
+    b.title = c.label;
+    b.addEventListener('click', () => onCat(c.key));
+    container.appendChild(b);
+  });
+}
+let invCat = 'all';     // 背包配方书当前分类
+let tableCat = 'all';   // 工作台配方书当前分类
+
+// 配方书：成品图标，能合成绿勾可点击，不能合成红叉（正常显示不灰化）；2×2 摆背包合成格，3×3 自动开工作台
+function renderRecipeBook(list, recipes, cat) {
   list.innerHTML = '';
   recipes.forEach(r => {
+    if (cat && cat !== 'all' && recipeCategory(r) !== cat) return;
     const can = canCraftRecipe(r);
     const d = document.createElement('div');
     d.className = 'recipe-cell ' + (can ? 'can' : 'cant');
@@ -760,7 +792,8 @@ function renderTable() {
   }
   renderTableInvGrid();
   renderTableHotbar();
-  renderRecipeBook($('tableRecipeList'), TABLE_RECIPES);
+  renderRecipeBook($('tableRecipeList'), TABLE_RECIPES, tableCat);
+  renderRecipeTabs($('tableRecipeTabs'), tableCat, cat => { tableCat = cat; renderTable(); });
 }
 
 function renderTableInvGrid() {
