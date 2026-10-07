@@ -1,6 +1,7 @@
-import { setBlock, inWorld, pendingDiffs, saveDirty, setDim, dim } from './world.js';
+import { setBlock, inWorld, pendingDiffs, saveDirty, setDim, dim, surfaceY } from './world.js';
 import { player } from './player.js';
 import { inv, invSlots, sel, setSel, armorSlots } from './inventory.js';
+import { furnaceToSave, furnaceFromSave } from './furnace.js';
 import { worldTime, setWorldTime } from './renderer.js';
 
 /* ================================================================
@@ -31,7 +32,10 @@ export function applyPlayerSave() {
     const data = JSON.parse(localStorage.getItem(SAVE_KEY) || 'null');
     if (!data || data.v !== 1 || !data.player) return;
     const p = data.player;
+    // 位置：若低于新版本地表（世界加高后旧档位置可能被埋），抬升到地表上方
     player.pos.set(p.x, p.y, p.z);
+    const ground = surfaceY(Math.floor(p.x), Math.floor(p.z));
+    if (player.pos.y < ground + 1) player.pos.y = ground + 1;
     player.yaw = p.yaw; player.pitch = p.pitch;
     player.hp = p.hp; player.fly = !!p.fly;
     // 库存：新格式 invSlots（36 格：0-8 快捷栏 + 9-35 背包）
@@ -88,6 +92,8 @@ export function applyPlayerSave() {
     }
     if (typeof data.time === 'number') setWorldTime(data.time);
     if (p.dim === 'nether') setDim('nether');   // 恢复玩家所在维度
+    // 熔炉状态（旧存档无此字段时保持空）
+    furnaceFromSave(p.furnace);
   } catch (e) { console.warn('玩家存档恢复失败', e); }
 }
 
@@ -111,6 +117,7 @@ export function flushSave() {
       sel,
       dim,
       armor: { ...armorSlots },
+      furnace: furnaceToSave(),
     };
     data.time = worldTime;
     localStorage.setItem(SAVE_KEY, JSON.stringify(data));

@@ -135,6 +135,32 @@
   </div>
 </div>
 
+<!-- 熔炉界面（上格原料 / 下格燃料 / 右侧结果 + 进度条） -->
+<div id="furnaceUI">
+  <div class="inv-panel mc-panel furnace-panel">
+    <div class="inv-head">
+      <span class="inv-title">🔥 熔炉</span>
+      <button class="inv-close" id="closeFurnaceBtn" title="关闭">✕</button>
+    </div>
+    <div class="furnace-body">
+      <div class="furnace-slots">
+        <div class="is-slot empty" id="furnaceInput" title="放要烧制的原料"></div>
+        <div class="is-slot empty" id="furnaceFuel" title="放燃料（煤/木板/木棍）"></div>
+      </div>
+      <div class="furnace-mid">
+        <div class="furnace-flame"><div id="furnaceFlameBar"></div></div>
+        <div class="furnace-arrow" id="furnaceArrow">→</div>
+        <div id="furnaceResult" class="empty" title="烧制结果（点击取走）"></div>
+      </div>
+      <div class="furnace-progress"><div id="furnaceProgressBar"></div></div>
+    </div>
+    <div class="mc-bag">
+      <div class="inv-grid inv-grid-9" id="furnaceInvGrid"></div>
+      <div class="inv-grid inv-hotbar" id="furnaceHotbar"></div>
+    </div>
+  </div>
+</div>
+
 <script type="module" src="./js/main.js"></script>
 </body>
 </html>

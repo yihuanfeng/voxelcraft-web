@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { CRAFT_TABLE, TOOL_DAMAGE } from './constants.js';
+import { CRAFT_TABLE, FURNACE, TOOL_DAMAGE } from './constants.js';
 import {
   world, getBlock, setBlock, surfaceY, generateWorld, generateNether,
   setDim, dim, overworldPortals, netherPortals, villages,
@@ -27,9 +27,11 @@ import {
   buildHotbarHud, renderHearts, renderDebug,
   updateSaveStatus, openInventory, closeInventory, isInventoryOpen,
   bindInventoryUI, bindTableUI, openTable, closeTable, isTableOpen,
+  bindFurnaceUI, openFurnace, closeFurnace, isFurnaceOpen,
   setMenuSubtitle, renderAir, renderBlockInfo,
   toggleMap, isMapOpen, tickMap,
 } from './ui.js';
+import { updateFurnace, furnace } from './furnace.js';
 import { spawnVillagers, updateVillagers, setVillagersVisible, villagers } from './villagers.js';
 
 /* ================================================================
@@ -44,6 +46,7 @@ buildHotbarHud();
 renderHearts();
 bindInventoryUI();
 bindTableUI();
+bindFurnaceUI();
 
 const hasSave = !!localStorage.getItem(SAVE_KEY);
 setMenuSubtitle(hasSave ? '检测到存档，点击开始自动继续' : '网页版迷你沙盒世界');
@@ -162,7 +165,7 @@ document.addEventListener('pointerlockchange', () => {
     started = true;
     menuEl.classList.add('hidden');
     hudEl.classList.add('visible');
-  } else if (started && !player.dead && !isInventoryOpen() && !isTableOpen()) {
+  } else if (started && !player.dead && !isInventoryOpen() && !isTableOpen() && !isFurnaceOpen()) {
     menuEl.classList.remove('hidden');
     hudEl.classList.remove('visible');
     document.getElementById('playBtn').textContent = '▶  继续游戏';
@@ -192,26 +195,28 @@ addEventListener('keydown', e => {
     const n = +e.code.slice(5);
     if (n >= 1 && n <= 9) setSel(n - 1);
   }
-  if (e.code === 'KeyF' && !isInventoryOpen() && !isTableOpen()) {
+  if (e.code === 'KeyF' && !isInventoryOpen() && !isTableOpen() && !isFurnaceOpen()) {
     player.fly = !player.fly;
     player.vel.set(0, 0, 0);
   }
-  if (e.code === 'KeyQ' && started && locked && !player.dead && !isInventoryOpen() && !isTableOpen()) {
+  if (e.code === 'KeyQ' && started && locked && !player.dead && !isInventoryOpen() && !isTableOpen() && !isFurnaceOpen()) {
     dropItem();
   }
   if (e.code === 'KeyE') {
     e.preventDefault();
+    if (isFurnaceOpen()) closeFurnace();
     if (isTableOpen()) closeTable();
     if (isInventoryOpen()) { closeInventory(); if (!player.dead) lockPointer(); }
     else if (started) openInventory();
   }
   if (e.code === 'Escape') {
+    if (isFurnaceOpen()) { closeFurnace(); if (!player.dead) lockPointer(); }
     if (isTableOpen()) { closeTable(); if (!player.dead) lockPointer(); }
     else if (isInventoryOpen()) { closeInventory(); if (!player.dead) lockPointer(); }
     else if (isMapOpen()) { toggleMap(); if (!player.dead) lockPointer(); }
   }
   if (e.code === 'KeyM' && started && !player.dead) {
-    if (!isInventoryOpen() && !isTableOpen()) {
+    if (!isInventoryOpen() && !isTableOpen() && !isFurnaceOpen()) {
       if (!isMapOpen()) { toggleMap(); document.exitPointerLock && document.exitPointerLock(); }
       else { toggleMap(); lockPointer(); }
     }
@@ -237,7 +242,7 @@ function tryAttack() {
 }
 
 addEventListener('mousedown', e => {
-  if (!started || player.dead || isInventoryOpen() || isTableOpen()) return;
+  if (!started || player.dead || isInventoryOpen() || isTableOpen() || isFurnaceOpen()) return;
   if (e.button === 0) {
     if (!tryAttack()) {
       mining.active = true;
@@ -248,13 +253,14 @@ addEventListener('mousedown', e => {
   } else if (e.button === 2) {
     const hit = aimBlock();
     if (hit && hit.id === CRAFT_TABLE) openTable();
+    else if (hit && hit.id === FURNACE) openFurnace();
     else placeBlock();
   }
 });
 addEventListener('mouseup', e => { if (e.button === 0) mining.active = false; });
 addEventListener('contextmenu', e => e.preventDefault());
 addEventListener('mousemove', e => {
-  if (!started || player.dead || isInventoryOpen() || isTableOpen()) return;
+  if (!started || player.dead || isInventoryOpen() || isTableOpen() || isFurnaceOpen()) return;
   const s = 0.0035;
   player.yaw -= e.movementX * s;
   player.pitch -= e.movementY * s;
@@ -280,7 +286,7 @@ function animate() {
   debugAcc += dt;
 
   if (started && isMapOpen()) tickMap();
-  if (started && locked && !player.dead && !isInventoryOpen() && !isTableOpen() && !isMapOpen()) {
+  if (started && locked && !player.dead && !isInventoryOpen() && !isTableOpen() && !isFurnaceOpen() && !isMapOpen()) {
     updatePlayer(dt);
     for (const z of [...zombies]) z.update(dt);
     updateBoneProjectiles(dt);
@@ -316,12 +322,13 @@ function animate() {
   updateParticles(dt);
   renderAir();          // 氧气条
   renderBlockInfo(aimBlock());   // 准星指向方块信息
+  updateFurnace(dt);    // 熔炉烧制（关闭界面也持续进行）
   updateBuildQueue();   // 分帧构建剩余区块
   const flash = updateFlash(dt);
   document.getElementById('flash').style.opacity = flash;
   document.getElementById('watertint').style.opacity = player.headInWater ? 1 : 0;
 
-  if (!started || player.dead || isInventoryOpen() || isTableOpen()) highlight.visible = false;
+  if (!started || player.dead || isInventoryOpen() || isTableOpen() || isFurnaceOpen()) highlight.visible = false;
   else {
     const hit = aimBlock();
     if (hit) {
@@ -342,7 +349,8 @@ window.game = {
   get hotbar() { return invSlots.slice(0, 9).map(s => s ? s.id : null); },
   droppedItems, pickups, zombieBoxes, villages, villagers,
   forceStart, setPeaceful, openInventory, closeInventory, flushSave,
-  openTable, closeTable, isTableOpen, aimBlock, dim: () => dim, switchDimension,
+  openTable, closeTable, isTableOpen, openFurnace, closeFurnace, isFurnaceOpen, furnace,
+  aimBlock, dim: () => dim, switchDimension,
   look(yaw, pitch) { player.yaw = yaw; player.pitch = pitch; },
   teleport(x, y, z) { player.pos.set(x, y, z); player.vel.set(0, 0, 0); },
   breakAt(x, y, z) { return breakBlock(x, y, z); },

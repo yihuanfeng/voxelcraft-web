@@ -66,45 +66,60 @@ function fillColumn(arr, cx, cz, lx, lz, isNether) {
   } else {
     const n = fbm(x * 0.014, z * 0.014, 4);
     const detail = fbm(x * 0.06 + 500, z * 0.06 + 500, 2);
-    let h = Math.floor(15 + n * 32 + detail * 6);
-    // 大陆尺度：山脉 / 平原 / 大海（出生点周围保持原地形）
+    let h = Math.floor(32 + n * 32 + detail * 6);
+    // 生物群系：干燥度（沙漠/泥地）与岩石度（石地/石山）决定地表类型
+    const dry = fbm(x * 0.02 + 700, z * 0.02 + 700, 2);
+    const rock = fbm(x * 0.03 + 300, z * 0.03 + 300, 2);
+    let surface = GRASS;
+    if (rock > 0.62) surface = STONE;                    // 石头地
+    else if (dry > 0.62) surface = SAND;                 // 沙漠
+    else if (dry > 0.45) surface = DIRT;                 // 泥巴地
+    // 大陆尺度：尖峰山脉 / 平原 / 大海（出生点周围保持原地形）
     if (Math.abs(x - 256) >= 48 || Math.abs(z - 256) >= 48) {
       const land = fbm(x * 0.0035, z * 0.0035, 3);
       if (land < 0.18) {
-        h = Math.floor(52 + (0.18 - land) * 160 + detail * 10);        // 高山
+        // 尖峰山：低频基座 + 三角波山脊（ridge），脊峰窄而陡，形成尖峰群
+        const t = Math.max(0, (0.18 - land)) / 0.18;
+        const base = 50 + Math.pow(t, 1.3) * 24;
+        const n = fbm(x * 0.045 + 300, z * 0.045 + 300, 2);
+        const ridge = 1 - Math.abs(n * 2 - 1);
+        h = Math.floor(Math.min(122, base + Math.pow(ridge, 1.6) * 70 * t + detail * 6));
+        surface = STONE;
       } else if (land > 0.32) {
-        h = Math.floor(h * 0.45) - 6;                                   // 深海
+        h = Math.floor(h * 0.45) - 6;                    // 深海
       } else if (land > 0.28) {
-        h = Math.floor(h * 0.68);                                       // 浅海 / 低地
+        h = Math.floor(h * 0.68);                        // 浅海 / 低地
       }
     }
     for (let y = 0; y <= h; y++) {
       let id;
-      if (y === 0) id = BEDROCK;
+      if (y === 0 || y === 1) id = BEDROCK;              // 基岩两层，更结实
       else if (y < h - 3) id = STONE;
       else if (y < h) id = (h <= SEA + 1 ? SAND : DIRT);
-      else id = (h <= SEA + 1 ? SAND : GRASS);
+      else id = (h <= SEA + 1 ? SAND : surface);
       arr[windex(lx, y, lz)] = id;
     }
     for (let y = h + 1; y <= SEA; y++) arr[windex(lx, y, lz)] = WATER;
-    // 洞穴（更深的矿洞）
-    for (let y = 4; y < h - 1; y += 2) {
-      if (fbm3(x * 0.055, y * 0.09, z * 0.055, 2) > 0.60) {
-        for (let dy = 0; dy < 3; dy++) {
+    // 洞穴（更深的矿洞）：大尺度空洞 + 细密通道，地下不再实心
+    for (let y = 3; y < h - 1; y++) {
+      const big = fbm3(x * 0.045, y * 0.07, z * 0.045, 3);
+      const thin = fbm3(x * 0.11 + 900, y * 0.13 + 400, z * 0.11 + 200, 2);
+      if (big > 0.60 || thin > 0.72) {
+        for (let dy = 0; dy < 2; dy++) {
           const yy = y + dy;
           if (yy > 2 && yy < h - 1 && arr[windex(lx, yy, lz)] === STONE) arr[windex(lx, yy, lz)] = AIR;
         }
       }
     }
-    // 矿物团簇（按深度分布）
+    // 矿物团簇（基岩上方几乎全是石头且布满矿物，按深度分布）
     for (let y = 2; y < h - 1; y++) {
       if (arr[windex(lx, y, lz)] !== STONE) continue;
       const r = hash2(x * 31 + y * 7, z * 31 + y * 13);
-      if (y <= 18 && r < 0.0055)      arr[windex(lx, y, lz)] = DIAMOND_ORE;
-      else if (y <= 34 && r < 0.009)  arr[windex(lx, y, lz)] = GOLD_ORE;
-      else if (y <= 52 && r < 0.016)  arr[windex(lx, y, lz)] = COPPER_ORE;
-      else if (y <= 56 && r < 0.02)   arr[windex(lx, y, lz)] = IRON_ORE;
-      else if (y <= 80 && r < 0.024)  arr[windex(lx, y, lz)] = COAL_ORE;
+      if (y <= 30 && r < 0.007)      arr[windex(lx, y, lz)] = DIAMOND_ORE;
+      else if (y <= 50 && r < 0.012) arr[windex(lx, y, lz)] = GOLD_ORE;
+      else if (y <= 70 && r < 0.020) arr[windex(lx, y, lz)] = COPPER_ORE;
+      else if (y <= 78 && r < 0.032) arr[windex(lx, y, lz)] = IRON_ORE;
+      else if (y <= 105 && r < 0.034) arr[windex(lx, y, lz)] = COAL_ORE;
     }
     // 深层岩浆池
     for (let y = 3; y <= 6; y++) {
@@ -112,7 +127,7 @@ function fillColumn(arr, cx, cz, lx, lz, isNether) {
         arr[windex(lx, y, lz)] = LAVA;
         if (arr[windex(lx, y + 1, lz)] === STONE) arr[windex(lx, y + 1, lz)] = LAVA;
         // 岩浆池底垫基岩：挖穿岩浆即见基岩层
-        for (let yy = y - 1; yy >= y - 2 && yy > 0; yy--) {
+        for (let yy = y - 1; yy >= y - 2 && yy > 1; yy--) {
           if (arr[windex(lx, yy, lz)] === STONE || arr[windex(lx, yy, lz)] === DIRT) {
             arr[windex(lx, yy, lz)] = BEDROCK;
           }
@@ -257,7 +272,7 @@ function placePortalStructure(px, pz, isNether) {
 // 村庄建筑（与旧算法一致；世界级写入，可跨区块）
 function placeVillage(vx, vz) {
   const vy = surfaceY(vx, vz);
-  if (vy < SEA + 2 || vy > 42) return;
+  if (vy < SEA + 2 || vy > 78) return;
   const houses = 3 + Math.floor(hash2(vx, vz) * 3);
   const dirs = [];
   for (let i = 0; i < houses; i++) {
@@ -266,7 +281,7 @@ function placeVillage(vx, vz) {
   }
   for (const [dx, dz] of dirs) {
     const hx = vx + dx, hz = vz + dz, hy = surfaceY(hx, hz);
-    if (hy < SEA + 2 || hy > 42) continue;
+    if (hy < SEA + 2 || hy > 78) continue;
     for (let yy = hy + 1; yy <= hy + 3; yy++) {
       for (let xx = hx - 2; xx <= hx + 2; xx++) wset(xx, yy, hz - 2, LOG);
       for (let xx = hx - 2; xx <= hx + 2; xx++) {

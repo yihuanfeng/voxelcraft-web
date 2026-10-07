@@ -24,6 +24,7 @@
 | `js/player.js` | 玩家物理、挖掘/放置、伤害（含盔甲减伤）、死亡/重生 |
 | `js/inventory.js` | 库存 36 格（同一套格子：0-8 快捷栏 + 9-35 背包）、盔甲槽、物品计数、`inventoryEvents` |
 | `js/crafting.js` | 2×2/3×3 合成（形状匹配）、70+ 配方（含储存块正/逆向、铜盔甲）、`craftEvents` |
+| `js/furnace.js` | 熔炉烧制：`SMELT_RECIPES`（铁/金/铜矿→锭、沙→玻璃、圆石→石头、生肉→熟肉，`time` 秒/个）、`FUEL_VALUES`（煤 80s/木板 15s/木棍 5s）、`furnace` 状态（input/fuel/result/fuelLeft/progress）、`updateFurnace(dt)` 每帧推进、`furnaceEvents`、存档 `furnaceToSave/furnaceFromSave` |
 | `js/zombies.js` | 怪物：僵尸/骷髅/蜘蛛/苦力怕/老虎、刷怪器、骷髅箭 |
 | `js/villagers.js` | 村庄村民 NPC |
 | `js/ui.js` | HUD、原版布局背包/工作台、配方书（勾叉+自动摆放）、角色小人、物品图标 |
@@ -62,8 +63,9 @@ zombies.js → constants / world / player / renderer / audio
 
 ### 无限世界（必须遵守）
 
-- **无限区块化**：主世界 `chunks`、下界 `netherChunks` 为 Map（key `"cx,cz"`，每块 Uint8Array 16×16×96）
+- **无限区块化**：主世界 `chunks`、下界 `netherChunks` 为 Map（key `"cx,cz"`，每块 Uint8Array 16×16×128）
 - `getBlock/setBlock` 任意坐标：未生成的区块按确定性噪声**惰性生成**（genChunk，树/矿洞/矿物同旧算法）
+- **主世界地形**（world.js fillColumn）：`HEIGHT=128`（基岩 y0-1 两层）、`SEA=33`；地表高度 `32+n*32+detail*6`；生物群系用 `dry`（>0.62 沙地沙漠 / >0.45 泥地 DIRT 表）与 `rock`（>0.62 石地 STONE 表）噪声定地表；`land<0.18` 山区=尖峰山（基座 `50+t^1.3*24` + 三角波 ridge `pow(1-|2n-1|,1.6)*70*t`，`h` 上限 122）；`land>0.32` 深海 / `>0.28` 浅海；洞穴双尺度 3D 噪声（big>0.60 或 thin>0.72 挖 2 层）；矿物深度：钻石 y≤30 / 金 ≤50 / 铜 ≤70 / 铁 ≤78 / 煤 ≤105；岩浆池 y3-6；村庄只在地表 33-78 生成
 - 出生原点 (256,256)；村庄 5 处与传送门 2 处固定布局（genChunk 时放置）
 - 网格构建走分帧：`scheduleRebuildAll(px,pz)`（玩家周围 LOAD_R=8 区块）+ 每帧 `updateBuildQueue()`（5 块/帧）+ `ensureChunks()` 自动补载（跨区块触发，0.4 秒节流）；远离 KEEP_R=12 的区块网格自动回收
 - 挖/放单块用 `rebuildAround(x,z)` 局部重建
@@ -100,8 +102,9 @@ zombies.js → constants / world / player / renderer / audio
 
 ### UI（ui.js）
 
-- 背包/工作台是**两栏原版布局**（`mc-panel > mc-body`）：左栏分类 tabs（`.recipe-tabs`，竖排：全部/方块/工具/装备/材料，`recipeCategory()` 按 result 的 `ARMOR/TOOL_DAMAGE/PLACEABLE_IDS` 分类，state `invCat/tableCat`）+ 配方书（`.recipe-book`，3 列纵向滚动，✓可合成/✕材料不足，**不可合成也正常显示不灰化**），右栏顶部合成区（2×2/3×3 → 箭头 → 结果格，背包右上有角色小人 `playerModel` + 盔甲竖槽 `armorGrid`），右栏底部背包 3×9（`invGrid`，只渲染 9-35）与快捷栏 1×9（`invHotbar`，只渲染 0-8）在同一 `mc-bag` 容器内紧贴
+- 背包/工作台是**两栏原版布局**（`mc-panel > mc-body`）：左栏分类 tabs（`.recipe-tabs`，竖排：全部/方块/工具/装备/材料/**可合成/不可合成**，后两者按 `canCraftRecipe(r)` 过滤，state `invCat/tableCat`）+ 配方书（`.recipe-book`，3 列纵向滚动，✓可合成/✕材料不足，**不可合成也正常显示不灰化**），右栏顶部合成区（2×2/3×3 → 箭头 → 结果格，背包右上有角色小人 `playerModel` + 盔甲竖槽 `armorGrid`），右栏底部背包 3×9（`invGrid`，只渲染 9-35）与快捷栏 1×9（`invHotbar`，只渲染 0-8）在同一 `mc-bag` 容器内紧贴
 - 工作台同构（3×3，无小人/盔甲栏）：`tableRecipeList`、`tableInvGrid`、`tableHotbar`
+- **熔炉界面**（`#furnaceUI`，右键 FURNACE 打开）：`furnaceInput`（原料）/`furnaceFuel`（燃料）竖排 + 火焰条 `furnaceFlameBar` + 箭头 + `furnaceResult`（成品，点击取走）+ 进度条 `furnaceProgressBar` + 同套库存格 `furnaceInvGrid/furnaceHotbar`；交互同 slotDnd（data `{i}` 库存 / `{f}` 熔炉格）；`renderFurnaceCore()` 每帧轻量刷进度、`renderFurnace()` 库存变化时全刷；关闭熔炉时 input/fuel/result 全部 `addItem` 退回背包
 - 交互模型：点击库存格选中（`selectedSlot`，invSlots 全局索引）→ 再点另一格 `moveSlot` 整格交换；快捷栏格点击顺带 `setSel`；HTML5 拖放 `slotDnd`（data JSON `{i:库存索引}` 或 `{c:合成格索引}`）：库存↔库存整格交换、合成格→库存退回 `addItem`、库存→合成格 `removeItemAt(src,1)` 放入、合成格间移动；点击配方书可合成项=自动摆放材料；关闭背包/工作台时合成格材料自动退回
 - 角色小人为 2D 像素绘制（`renderPlayerModel`，16×32 逻辑像素），盔甲颜色按 ID 段映射
 - 事件驱动刷新：`inventoryEvents('invchange'/'selchange'/'armorchange')`、`craftEvents('change')`、`playerEvents('healthchange'/'death'/'respawn')`；背包/工作台开着时 invchange 要全刷（配方书勾叉随材料变化）
@@ -126,5 +129,6 @@ zombies.js → constants / world / player / renderer / audio
 - 苦力怕模型缺 armL/armR → 每帧 Uncaught TypeError
 - 清档后 pagehide 会把内存旧状态写回 → `disableSave()` 守卫
 - 滚轮切换快捷栏已移除（误触），只保留数字键/点击
-- 测试动过用户存档后要恢复干净状态，别留测试物品（**恢复基准**：位置 256,28,256、hp20、无盔甲、快捷栏 7 格 id 序 `[10,42,5,1,2,79,11]` 各 1、背包 `9+i` 放 `[[10,47],[42,1],[5,3],[1,2],[2,2],[11,1],[39,1]]`）
+- 测试动过用户存档后要恢复干净状态，别留测试物品（**恢复基准**：位置 256,28,256、hp20、无盔甲、快捷栏 7 格 id 序 `[10,42,5,1,2,79,11]` 各 1、背包 `9+i` 放 `[[10,47],[42,1],[5,3],[1,2],[2,2],[11,1],[39,1]]`；熔炉状态清空；`applyPlayerSave` 会自动把低于地表的位置抬到地表上方，旧档坐标可安全回写）
 - 迁移旧档后测试前先确认页面 `started` 状态：未点开始前 pagehide 不会写回，可直接改 localStorage 重测迁移
+- 改地形生成参数后必须 `?v=NN` 刷新重生成区块（chunks Map 只在页面生命周期内缓存）

@@ -178,6 +178,7 @@ html, body {
   background: rgba(5, 8, 18, 0.62); backdrop-filter: blur(3px);
 }
 #tableUI { z-index: 9; }
+#furnaceUI { z-index: 9; }
 .mc-panel {
   width: 740px; max-width: 96vw; max-height: 94vh; overflow: auto;
   background: linear-gradient(180deg, rgba(31, 37, 51, 0.98), rgba(20, 25, 37, 0.98));
@@ -285,6 +286,34 @@ html, body {
 
 /* 拖放高亮 */
 .is-slot.drag-over { border-color: #ffe27a; background: rgba(255, 226, 122, 0.35); }
+
+/* 熔炉界面 */
+.furnace-panel { width: 460px; }
+.furnace-body { display: flex; align-items: center; justify-content: center; gap: 20px; padding: 6px 0 12px; }
+.furnace-slots { display: flex; flex-direction: column; gap: 8px; }
+.furnace-slots .is-slot { width: 52px; min-height: 52px; margin: 0; }
+.furnace-slots .is-slot canvas, #furnaceResult canvas { width: 42px; height: 42px; }
+.furnace-mid { display: flex; flex-direction: column; align-items: center; gap: 6px; }
+.furnace-flame {
+  width: 20px; height: 34px; position: relative; overflow: hidden;
+  background: rgba(255, 255, 255, 0.07); border-radius: 4px 4px 8px 8px;
+}
+#furnaceFlameBar {
+  position: absolute; bottom: 0; left: 0; right: 0; height: 0;
+  background: linear-gradient(180deg, #ffcf5a, #ff7a2a); border-radius: 4px 4px 0 0;
+}
+.furnace-arrow { font-size: 22px; color: #cfcfcf; font-weight: 700; }
+#furnaceResult { width: 52px; min-height: 52px; }
+#furnaceResult.preview { opacity: 0.5; }
+.furnace-progress {
+  height: 7px; background: rgba(255, 255, 255, 0.08); border-radius: 4px;
+  overflow: hidden; margin-bottom: 10px;
+}
+#furnaceProgressBar {
+  height: 100%; width: 0;
+  background: linear-gradient(90deg, #ffcf5a, #ff7a2a); border-radius: 4px;
+  transition: width 0.15s linear;
+}
 
 /* 格子通用 */
 .is-slot {

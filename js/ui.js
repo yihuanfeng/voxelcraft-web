@@ -12,7 +12,7 @@ import { BLOCKS, atlas,
          GOLD_HELMET, GOLD_CHESTPLATE, GOLD_LEGGINGS, GOLD_BOOTS,
          DIAMOND_HELMET, DIAMOND_CHESTPLATE, DIAMOND_LEGGINGS, DIAMOND_BOOTS,
          COPPER_HELMET, COPPER_CHESTPLATE, COPPER_LEGGINGS, COPPER_BOOTS,
-         EMERALD, BONE, STRING, GUNPOWDER, ARMOR, ARMOR_SLOTS, recommendTool,
+         EMERALD, BONE, STRING, GUNPOWDER, COOKED_MEAT, ARMOR, ARMOR_SLOTS, recommendTool,
          BLOCK_TIER, TOOL_TIER, TOOL_DAMAGE, PLACEABLE_IDS } from './constants.js';
 import { inv, invSlots, sel, setSel, addItem, removeItem, removeItemAt, moveSlot,
          itemCount, inventoryEvents, armorSlots, wearArmorAt, takeOffArmor, selectedHotbarId } from './inventory.js';
@@ -24,6 +24,7 @@ import { zombies } from './zombies.js';
 import { worldTime, isDay, renderer } from './renderer.js';
 import { lastSaveAt } from './save.js';
 import { getBlock, surfaceY, villages, overworldPortals, chunks as worldChunks } from './world.js';
+import { furnace, furnaceEvents, SMELT_RECIPES } from './furnace.js';
 
 /* ================================================================
    DOM 工具
@@ -59,7 +60,7 @@ const KIND_BY_ID = {
   [LEATHER]: ['leather', 'leather'],
   [EMERALD]: ['emerald', 'gem'], [BONE]: ['bone', 'mat'],
   [STRING]: ['string', 'mat'], [GUNPOWDER]: ['powder', 'mat'],
-  [COPPER_INGOT]: ['ingot', 'copper'], [RAW_MEAT]: ['meat', 'mat'],
+  [COPPER_INGOT]: ['ingot', 'copper'], [RAW_MEAT]: ['meat', 'mat'], [COOKED_MEAT]: ['meatcooked', 'mat'],
   [LEATHER_HELMET]: ['helmet', 'leather'], [LEATHER_CHESTPLATE]: ['chest', 'leather'],
   [LEATHER_LEGGINGS]: ['legs', 'leather'], [LEATHER_BOOTS]: ['boots', 'leather'],
   [IRON_HELMET]: ['helmet', 'iron'], [IRON_CHESTPLATE]: ['chest', 'iron'],
@@ -148,6 +149,10 @@ function drawSpecial(ctx, size, kind, mat) {
       if (y >= 4 && y <= 11 && x >= 4 && x <= 11) col = (x === 4 || x === 11 || y === 4 || y === 11) ? '#c45a3a' : '#e07a52';
       if (y === 6 && x >= 7 && x <= 9) col = '#d9a060';
       if (y === 7 && x >= 6 && x <= 8) col = '#d9a060';
+    } else if (kind === 'meatcooked') {
+      if (y >= 4 && y <= 11 && x >= 4 && x <= 11) col = (x === 4 || x === 11 || y === 4 || y === 11) ? '#8a4a2a' : '#a86038';
+      if (y === 6 && x >= 7 && x <= 9) col = '#7a5230';
+      if (y === 7 && x >= 6 && x <= 8) col = '#7a5230';
     } else if (kind === 'helmet') {
       if (y >= 2 && y <= 5) col = (x >= 3 && x <= 12) ? c.head : null;
       else if (y >= 6 && y <= 9) col = (x === 3 || x === 12) ? c.head : null;
@@ -698,13 +703,15 @@ function autoPlaceRecipe(r, slots, W) {
   for (let i = 0; i < W * W; i++) slots[i] = r.pattern[i] != null ? r.pattern[i] : null;
   return true;
 }
-// 配方分类（用于配方书左侧 tabs）
+// 配方分类（用于配方书左侧 tabs；can/cant 为可合成状态筛选）
 const RECIPE_CATS = [
   { key: 'all',   label: '全部' },
   { key: 'block', label: '方块' },
   { key: 'tool',  label: '工具' },
   { key: 'armor', label: '装备' },
   { key: 'mat',   label: '材料' },
+  { key: 'can',   label: '可合成' },
+  { key: 'cant',  label: '不可合成' },
 ];
 function recipeCategory(r) {
   const id = r.result;
@@ -732,7 +739,11 @@ let tableCat = 'all';   // 工作台配方书当前分类
 function renderRecipeBook(list, recipes, cat) {
   list.innerHTML = '';
   recipes.forEach(r => {
-    if (cat && cat !== 'all' && recipeCategory(r) !== cat) return;
+    if (cat && cat !== 'all') {
+      if (cat === 'can') { if (!canCraftRecipe(r)) return; }
+      else if (cat === 'cant') { if (canCraftRecipe(r)) return; }
+      else if (recipeCategory(r) !== cat) return;
+    }
     const can = canCraftRecipe(r);
     const d = document.createElement('div');
     d.className = 'recipe-cell ' + (can ? 'can' : 'cant');
@@ -892,12 +903,150 @@ export function bindTableUI() {
 }
 
 /* ================================================================
+   熔炉界面（上格原料 / 下格燃料 / 右侧结果 + 进度条）
+================================================================ */
+let furnaceOpen = false;
+
+export function isFurnaceOpen() { return furnaceOpen; }
+
+export function openFurnace() {
+  furnaceOpen = true;
+  selectedSlot = null;
+  $('furnaceUI').style.display = 'flex';
+  renderFurnace();
+  if (document.exitPointerLock) document.exitPointerLock();
+}
+export function closeFurnace() {
+  furnaceOpen = false;
+  selectedSlot = null;
+  // 原料 / 燃料 / 结果全部退回背包（避免物品丢失）
+  for (const slot of ['input', 'fuel', 'result']) {
+    const s = furnace[slot];
+    if (s != null) { addItem(s.id, s.count); furnace[slot] = null; }
+  }
+  furnace.fuelLeft = 0; furnace.progress = 0;
+  $('furnaceUI').style.display = 'none';
+}
+
+// 渲染一个熔炉格（slotEl + 数据对象 + 图标大小）
+function drawFurnaceSlot(el, s, emptyTitle) {
+  el.innerHTML = '';
+  el.classList.toggle('empty', !s);
+  el.title = s ? BLOCKS[s.id].name + ' ×' + s.count : emptyTitle;
+  if (s) {
+    const cv = makeSlotCv(40);
+    drawItemIcon(cv, s.id);
+    el.appendChild(cv);
+    const cnt = document.createElement('span');
+    cnt.className = 'count'; cnt.textContent = s.count;
+    el.appendChild(cnt);
+  }
+}
+
+// 轻量刷新：原料/燃料/结果/进度/火焰（每帧调用）
+function renderFurnaceCore() {
+  drawFurnaceSlot($('furnaceInput'), furnace.input, '放要烧制的原料');
+  drawFurnaceSlot($('furnaceFuel'), furnace.fuel, '放燃料（煤/木板/木棍）');
+  drawFurnaceSlot($('furnaceResult'), furnace.result, '烧制结果');
+  const rec = furnace.input ? SMELT_RECIPES[furnace.input.id] : null;
+  // 结果格预览：无结果但可烧时显示成品轮廓
+  const resEl = $('furnaceResult');
+  if (!furnace.result && rec) {
+    const cv = makeSlotCv(40);
+    drawItemIcon(cv, rec.out);
+    resEl.appendChild(cv);
+    resEl.classList.add('preview');
+    resEl.title = BLOCKS[rec.out].name + '（烧制中）';
+  } else {
+    resEl.classList.remove('preview');
+  }
+  // 进度条
+  const pb = $('furnaceProgressBar');
+  pb.style.width = (furnace.progress * 100).toFixed(1) + '%';
+  // 火焰条：燃料剩余
+  const fb = $('furnaceFlameBar');
+  const fuelMax = 80;
+  fb.style.height = Math.min(100, (furnace.fuelLeft / fuelMax) * 100).toFixed(0) + '%';
+}
+
+export function renderFurnace() {
+  renderFurnaceCore();
+  // 库存格（9-35 背包 + 0-8 快捷栏，与背包同一套格子）
+  const grid = $('furnaceInvGrid');
+  grid.innerHTML = '';
+  for (let i = 9; i < 36; i++) {
+    const d = document.createElement('div');
+    renderInvSlot(d, i);
+    d.addEventListener('click', () => { onInvSlotClick(i); renderFurnace(); });
+    slotDnd(d, () => invSlots[i] ? { i } : null, data => { onInvSlotDrop(data, i); renderFurnace(); });
+    grid.appendChild(d);
+  }
+  const bar = $('furnaceHotbar');
+  bar.innerHTML = '';
+  for (let i = 0; i < 9; i++) {
+    const d = document.createElement('div');
+    renderInvSlot(d, i);
+    d.addEventListener('click', () => { onInvSlotClick(i); renderFurnace(); });
+    slotDnd(d, () => invSlots[i] ? { i } : null, data => { onInvSlotDrop(data, i); renderFurnace(); });
+    bar.appendChild(d);
+  }
+}
+
+// 熔炉格点击 / 拖放绑定
+function bindFurnaceSlot(kind, el) {
+  el.addEventListener('click', () => {
+    if (furnace[kind] != null) {
+      addItem(furnace[kind].id, furnace[kind].count);
+      furnace[kind] = null;
+    } else if (selectedSlot != null && invSlots[selectedSlot] != null) {
+      const id = invSlots[selectedSlot].id;
+      removeItemAt(selectedSlot, 1);
+      furnace[kind] = { id, count: 1 };
+      selectedSlot = null;
+    }
+    renderFurnace();
+  });
+  slotDnd(el,
+    () => furnace[kind] != null ? { f: kind } : null,
+    data => {
+      if (data == null) return;
+      if (data.i != null && invSlots[data.i] != null && furnace[kind] == null) {
+        const id = invSlots[data.i].id;
+        removeItemAt(data.i, 1);
+        furnace[kind] = { id, count: 1 };
+      } else if (data.f && data.f !== kind && furnace[data.f] != null && furnace[kind] == null) {
+        furnace[kind] = furnace[data.f];
+        furnace[data.f] = null;
+      }
+      renderFurnace();
+    });
+}
+
+export function bindFurnaceUI() {
+  $('closeFurnaceBtn').addEventListener('click', () => {
+    closeFurnace();
+    if (!player.dead) renderer.domElement.requestPointerLock?.();
+  });
+  bindFurnaceSlot('input', $('furnaceInput'));
+  bindFurnaceSlot('fuel', $('furnaceFuel'));
+  // 结果格：点击取走全部
+  $('furnaceResult').addEventListener('click', () => {
+    if (furnace.result != null) {
+      addItem(furnace.result.id, furnace.result.count);
+      furnace.result = null;
+      renderFurnace();
+    }
+  });
+}
+
+/* ================================================================
    事件订阅
 ================================================================ */
 inventoryEvents.addEventListener('invchange', () => {
   renderHotbarHud();
   if (inventoryOpen) renderInventory();
   if (tableOpen) renderTable();
+  if (furnaceOpen) renderFurnace();
 });
 inventoryEvents.addEventListener('selchange', () => {
   renderHotbarHud();
@@ -909,6 +1058,9 @@ inventoryEvents.addEventListener('armorchange', () => {
 craftEvents.addEventListener('change', () => {
   if (inventoryOpen) renderCraftArea();
   if (tableOpen) renderTable();
+});
+furnaceEvents.addEventListener('change', () => {
+  if (furnaceOpen) renderFurnaceCore();
 });
 playerEvents.addEventListener('healthchange', renderHearts);
 playerEvents.addEventListener('death', e => showDeath(e.detail && e.detail.cause));

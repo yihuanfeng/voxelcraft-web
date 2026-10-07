@@ -4,10 +4,10 @@ import * as THREE from 'three';
    常量 & 方块注册表
 ================================================================ */
 export const SIZE = 512;          // 世界 SIZE x SIZE 方块（大世界）
-export const HEIGHT = 96;         // 世界高度
+export const HEIGHT = 128;        // 世界高度
 export const CHUNK = 16;          // 区块宽/深
 export const CHUNKS = SIZE / CHUNK;
-export const SEA = 21;            // 海平面
+export const SEA = 33;            // 海平面
 
 // 方块 / 物品 ID
 export const AIR = 0, GRASS = 1, DIRT = 2, STONE = 3, LOG = 4, LEAVES = 5,
@@ -38,7 +38,9 @@ export const AIR = 0, GRASS = 1, DIRT = 2, STONE = 3, LOG = 4, LEAVES = 5,
              IRON_BLOCK = 89, GOLD_BLOCK = 90, DIAMOND_BLOCK = 91, COPPER_BLOCK = 92,
              EMERALD_BLOCK = 93, COAL_BLOCK = 94,
              // 铜盔甲
-             COPPER_HELMET = 95, COPPER_CHESTPLATE = 96, COPPER_LEGGINGS = 97, COPPER_BOOTS = 98;
+             COPPER_HELMET = 95, COPPER_CHESTPLATE = 96, COPPER_LEGGINGS = 97, COPPER_BOOTS = 98,
+             // 熔炉产物
+             COOKED_MEAT = 99;
 
 // 可放置为方块的 ID 集合（方块类；物品/工具/盔甲不可放置）
 export const PLACEABLE_IDS = new Set([
@@ -214,6 +216,7 @@ export const BLOCKS = {
   [GUNPOWDER]:  { name:'火药', hard:0, tiles:{ all:7 }, color:0x8a8a8a },
   [COPPER_INGOT]:{ name:'铜锭', hard:0, tiles:{ all:8 }, color:0xcf8a3a },
   [RAW_MEAT]:  { name:'生肉', hard:0, tiles:{ all:7 }, color:0xd96a4a },
+  [COOKED_MEAT]:{ name:'熟肉', hard:0, tiles:{ all:7 }, color:0xc97a4a },
   [COPPER_SWORD]:{ name:'铜剑', hard:0, tiles:{ all:8 }, color:0xcf8a3a },
   [COPPER_PICK]: { name:'铜镐', hard:0, tiles:{ all:8 }, color:0xcf8a3a },
   [COPPER_AXE]:  { name:'铜斧', hard:0, tiles:{ all:8 }, color:0xcf8a3a },
